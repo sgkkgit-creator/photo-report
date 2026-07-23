@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_30</title>
+<title>写真台帳ツール v1_31</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -91,7 +91,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:0 16px;}
 @media(max-width:640px){.grid-2{grid-template-columns:1fr;}}
 
-/* ---------- 機器マスタ表 ---------- */
+/* ---------- 共通項目マスタ表 ---------- */
 .eq-table{width:100%; border-collapse:collapse; margin-top:4px;}
 .eq-table th{font-size:11.5px; color:var(--muted); text-align:left; font-weight:700; padding:6px 8px; border-bottom:1px solid var(--line);}
 .eq-table td{padding:5px 8px; border-bottom:1px solid var(--line-2); vertical-align:middle;}
@@ -268,7 +268,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_30</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_31</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -283,7 +283,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
   </div>
   <div class="tabs">
     <button class="tab active" data-tab="job">現場情報</button>
-    <button class="tab" data-tab="master">機器マスタ <span class="count" id="cntMaster"></span></button>
+    <button class="tab" data-tab="master">共通項目マスタ <span class="count" id="cntMaster"></span></button>
     <button class="tab" data-tab="works">作業マスタ <span class="count" id="cntWorks"></span></button>
     <button class="tab" data-tab="fields">出力項目</button>
     <button class="tab" data-tab="photos">写真 <span class="count" id="cntPhotos"></span></button>
@@ -317,22 +317,22 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
     <div class="card danger-zone">
       <div class="section-eyebrow" style="color:var(--danger);">危険な操作</div>
       <h2 class="sec-title" style="font-size:15px;">全データをクリア</h2>
-      <p class="hint">現場情報・機器マスタ・作業マスタ・写真をすべて削除し、この端末の自動保存も消します。<b>元に戻せません。</b></p>
+      <p class="hint">現場情報・共通項目マスタ・作業マスタ・写真をすべて削除し、この端末の自動保存も消します。<b>元に戻せません。</b></p>
       <button class="tool-btn danger" id="btnClearAll">全データをクリア…</button>
     </div>
   </section>
 
-  <!-- ===== 機器マスタ ===== -->
+  <!-- ===== 共通項目マスタ ===== -->
   <section class="panel" id="panel-master">
     <div class="card">
       <div class="section-eyebrow">Step 2</div>
-      <h2 class="sec-title">機器マスタ</h2>
-      <p class="hint">現場にある機器を一度だけ登録します。写真ではここから「選ぶだけ」で各項目が自動で入ります。列の内容は「出力項目」タブで自由に変えられます。</p>
+      <h2 class="sec-title">共通項目マスタ</h2>
+      <p class="hint">何枚もの写真で同じ値が続く項目を、一度だけまとめて登録します。写真ではここから「選ぶだけ」で各項目が自動で入ります（例：機器、建物、部屋など）。列の内容は「出力項目」タブで自由に決められます。</p>
       <table class="eq-table">
         <thead id="eqHead"></thead>
         <tbody id="eqBody"></tbody>
       </table>
-      <div style="margin-top:12px;"><button class="tool-btn" id="btnAddEq">＋ 機器を追加</button></div>
+      <div style="margin-top:12px;"><button class="tool-btn" id="btnAddEq">＋ 追加</button></div>
     </div>
   </section>
 
@@ -356,8 +356,8 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
       <div class="section-eyebrow">出力設定</div>
       <h2 class="sec-title">出力項目（写真の右側）</h2>
       <p class="hint">台帳の項目を顧客ごとに自由に決められます。項目名の変更・追加・削除、⠿ドラッグでの並べ替えができます。<br>
-        各項目の「どこから入るか」は2種類です。<b>機器マスタから</b>＝機器を選ぶと自動で入る（何枚も同じ値が続く項目向け）／<b>写真ごとに入力</b>＝1枚ずつ手で入れる。<br>
-        <b>ここで決めた内容は、機器マスタ・写真の入力欄・PDFのすべてに反映されます</b>。この設定は写真台帳データに含まれるので、書き出して別のPCで読み込んでも同じ体裁になります。</p>
+        各項目の「どこから入るか」は2種類です。<b>共通項目マスタから</b>＝マスタで選ぶとまとめて自動で入る（何枚も同じ値が続く項目向け）／<b>写真ごとに入力</b>＝1枚ずつ手で入れる。<br>
+        <b>ここで決めた内容は、共通項目マスタ・写真の入力欄・PDFのすべてに反映されます</b>。この設定は写真台帳データに含まれるので、書き出して別のPCで読み込んでも同じ体裁になります。</p>
       <div class="tpl-bar">
         <span class="tpl-label">テンプレート</span>
         <select id="tplSelect"><option value="">（選択してください）</option></select>
@@ -416,7 +416,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <div class="modal-overlay" id="clearModal">
   <div class="modal-box">
     <div class="modal-title">全データをクリアしますか？</div>
-    <p class="modal-text">現場情報・機器マスタ・作業マスタ・写真、そしてこの端末の自動保存をすべて削除します。<b>元に戻せません。</b><br>心配なら先にバックアップを取ってください。</p>
+    <p class="modal-text">現場情報・共通項目マスタ・作業マスタ・写真、そしてこの端末の自動保存をすべて削除します。<b>元に戻せません。</b><br>心配なら先にバックアップを取ってください。</p>
     <button class="tool-btn" id="clearBackup" style="margin-bottom:16px;">先に写真台帳データを書き出す（バックアップ）</button>
     <div class="field"><label>続けるには下の欄に「クリア」と入力してください</label>
       <input type="text" id="clearConfirmInput" placeholder="クリア" autocomplete="off"></div>
@@ -433,7 +433,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
    データ構造
    state = {
      job:{building, date, overallWork, showDate},   // building=現場名, date=作業日(既定), overallWork=全体作業内容, showDate=作業日表示
-     equipment:[{id, system, model, serial, room}],   // 機器マスタ
+     equipment:[{id, values:{}}],   // 共通項目マスタ
      works:[{id, name}],                              // 作業マスタ
      photos:[{id, img, date,                          // date=その写真の作業日
               equipId, system, model, serial, room, src,   // 機器（選択/上書き）
@@ -452,13 +452,13 @@ let state = { job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true},
      label … 画面とPDFに出る呼び名（自由に変更可）
      show  … 使う／使わない
      role  … 値がどこから来るか
-       'equip'  機器マスタから（機器を選ぶと自動で入る）
+       'equip'  共通項目マスタから（選ぶとまとめて自動で入る）
        'photo'  写真ごとに手入力
        'work'   作業マスタから（1つだけ）
        'date'   日付（1つだけ）
    並び順 = この配列の順（ドラッグで変更）
    ========================================================= */
-const ROLE_LABELS = {equip:'機器マスタから', photo:'写真ごとに入力', work:'作業マスタから', date:'日付'};
+const ROLE_LABELS = {equip:'共通項目マスタから', photo:'写真ごとに入力', work:'作業マスタから', date:'日付'};
 const DEFAULT_FIELDS = [
   {id:'date',    label:'作業日',   show:true, role:'date'},
   {id:'room',    label:'撮影場所', show:true, role:'equip'},
@@ -536,7 +536,7 @@ function normalizePhoto(p){
   });
   return o;
 }
-/* 旧形式の機器データを新形式（values）へ移行 */
+/* 旧形式のマスタデータを新形式（values）へ移行 */
 function normalizeEquip(e){
   const o = Object.assign({id:uid(), values:{}}, e);
   if(!o.values || typeof o.values!=='object') o.values={};
@@ -650,23 +650,23 @@ function refreshJobLabels(){
   $('#lbl-showdate').textContent = cv('coverDate') + 'を出力（表紙・各写真）に表示する';
 }
 
-/* ---------- 機器マスタ ---------- */
+/* ---------- 共通項目マスタ ---------- */
 function eqLabel(e){
   // 表示する項目・順序は「出力項目」タブの設定に従う
   const fs=equipFields();
   const parts=fs.map(f=> equipValue(e,f.id) || `(${f.label}なし)`);
-  return parts.length? parts.join(' / ') : '(機器)';
+  return parts.length? parts.join(' / ') : '(未登録)';
 }
 function renderMaster(){
   const fs=equipFields();
   $('#eqHead').innerHTML='<tr>'+fs.map(f=>`<th>${esc(f.label)}</th>`).join('')+'<th class="act"></th></tr>';
   const body=$('#eqBody'); body.innerHTML='';
   if(fs.length===0){
-    body.innerHTML='<tr><td class="eq-empty">「出力項目」タブで、機器マスタから入る項目を用意してください。</td></tr>';
+    body.innerHTML='<tr><td class="eq-empty">「出力項目」タブで、共通項目マスタから入る項目を用意してください。</td></tr>';
     updateCounts(); return;
   }
   if(state.equipment.length===0){
-    body.innerHTML=`<tr><td colspan="${fs.length+1}" class="eq-empty">機器がまだありません。「＋ 機器を追加」から登録してください。</td></tr>`;
+    body.innerHTML=`<tr><td colspan="${fs.length+1}" class="eq-empty">まだ登録がありません。「＋ 追加」から登録してください。</td></tr>`;
   }
   state.equipment.forEach((e)=>{
     const tr=document.createElement('tr');
@@ -751,7 +751,7 @@ async function addPhotoFiles(files){
     try{ data=await downscale(imgs[i]); }catch(e){ data=null; }
     if(!data){ data=await readAsDataURL(imgs[i]); }   // 縮小失敗→原本で取り込む
     if(data){
-      // 直前の写真から「機器＋作業内容」を引き継ぐ（写真ごとの項目・日付は引き継がない）
+      // 直前の写真から「マスタ項目＋作業内容」を引き継ぐ（写真ごとの項目・日付は引き継がない）
       const prev=state.photos[state.photos.length-1];
       const np=normalizePhoto({id:uid(), img:data, values:{}});
       if(prev){
@@ -778,7 +778,7 @@ const dz=$('#dropzone');
 ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
 dz.addEventListener('drop',e=>{ if(e.dataTransfer?.files?.length) addPhotoFiles(e.dataTransfer.files); });
 
-/* ---------- 写真：機器選択のプルダウン中身 ---------- */
+/* ---------- 写真：共通項目マスタ選択のプルダウン中身 ---------- */
 function eqOptionsHTML(selectedId){
   let html='<option value="__none__">（未選択／下欄に手入力）</option>';
   state.equipment.forEach(e=>{
@@ -820,7 +820,7 @@ function renderPhotos(){
     const wbadge = p.workSrc==='master' ? '<span class="badge master">マスタ</span>'
                  : p.workSrc==='edited' ? '<span class="badge edited">編集</span>' : '';
 
-    // 入力欄を「出力項目」の順に組み立てる。機器マスタ系はまとめて1つのプルダウンを付ける
+    // 入力欄を「出力項目」の順に組み立てる。マスタ系の項目はまとめて1つのプルダウンを付ける
     let bodyHTML='';
     let equipDone=false;
     fields.forEach(f=>{
@@ -866,7 +866,7 @@ function renderPhotos(){
           <button class="order-btn up" title="上へ" ${idx===0?'disabled':''}>▲</button>
           <button class="order-btn down" title="下へ" ${idx===state.photos.length-1?'disabled':''}>▼</button>
           <span class="grow"></span>
-          <button class="link-btn add-master" style="display:none;">＋ この機器をマスタに追加</button>
+          <button class="link-btn add-master" style="display:none;">＋ この内容をマスタに追加</button>
           <button class="icon-btn del" title="この写真を削除">🗑</button>
         </div>
       </div>`;
@@ -892,7 +892,7 @@ function renderPhotos(){
       });
     });
 
-    // 機器プルダウン
+    // 共通項目マスタのプルダウン
     const sel=card.querySelector('.eq-select');
     if(sel) sel.addEventListener('change',()=>{
       const v=sel.value;
@@ -1211,7 +1211,7 @@ function renderFields(){
       ${locked
         ? `<span class="f-role-fixed">${esc(ROLE_LABELS[f.role])}</span>`
         : `<select class="f-role">
-             <option value="equip" ${f.role==='equip'?'selected':''}>機器マスタから</option>
+             <option value="equip" ${f.role==='equip'?'selected':''}>共通項目マスタから</option>
              <option value="photo" ${f.role==='photo'?'selected':''}>写真ごとに入力</option>
            </select>`}
       <button class="icon-btn f-del" title="この項目を削除">✕</button>`;
