@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_33</title>
+<title>写真台帳ツール v1_34</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -268,7 +268,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_33</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_34</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -283,9 +283,9 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
   </div>
   <div class="tabs">
     <button class="tab active" data-tab="job">現場情報</button>
+    <button class="tab" data-tab="fields">出力項目</button>
     <button class="tab" data-tab="master">共通項目マスタ <span class="count" id="cntMaster"></span></button>
     <button class="tab" data-tab="works">作業マスタ <span class="count" id="cntWorks"></span></button>
-    <button class="tab" data-tab="fields">出力項目</button>
     <button class="tab" data-tab="photos">写真 <span class="count" id="cntPhotos"></span></button>
     <button class="tab" data-tab="preview">プレビュー</button>
   </div>
@@ -322,38 +322,10 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
     </div>
   </section>
 
-  <!-- ===== 共通項目マスタ ===== -->
-  <section class="panel" id="panel-master">
-    <div class="card">
-      <div class="section-eyebrow">Step 2</div>
-      <h2 class="sec-title">共通項目マスタ</h2>
-      <p class="hint">何枚もの写真で同じ値が続く項目を、一度だけまとめて登録します。写真ではここから「選ぶだけ」で各項目が自動で入ります（例：機器、建物、部屋など）。列の内容は「出力項目」タブで自由に決められます。</p>
-      <table class="eq-table">
-        <thead id="eqHead"></thead>
-        <tbody id="eqBody"></tbody>
-      </table>
-      <div style="margin-top:12px;"><button class="tool-btn" id="btnAddEq">＋ 追加</button></div>
-    </div>
-  </section>
-
-  <!-- ===== 作業マスタ ===== -->
-  <section class="panel" id="panel-works">
-    <div class="card">
-      <div class="section-eyebrow">Step 2</div>
-      <h2 class="sec-title">作業マスタ</h2>
-      <p class="hint">よく使う作業名を登録します。写真ではここから「選ぶだけ」で作業内容が入ります（例：圧縮機交換／温度センサ交換／フィルター清掃）。</p>
-      <table class="eq-table">
-        <thead id="workHead"></thead>
-        <tbody id="workBody"></tbody>
-      </table>
-      <div style="margin-top:12px;"><button class="tool-btn" id="btnAddWork">＋ 作業を追加</button></div>
-    </div>
-  </section>
-
   <!-- ===== 出力項目 ===== -->
   <section class="panel" id="panel-fields">
     <div class="card">
-      <div class="section-eyebrow">出力設定</div>
+      <div class="section-eyebrow">Step 2</div>
       <h2 class="sec-title">出力項目（写真の右側）</h2>
       <p class="hint">台帳の項目を顧客ごとに自由に決められます。項目名の変更・追加・削除、⠿ドラッグでの並べ替えができます。<br>
         各項目の「どこから入るか」は2種類です。<b>共通項目マスタから</b>＝マスタで選ぶとまとめて自動で入る（何枚も同じ値が続く項目向け）／<b>写真ごとに入力</b>＝1枚ずつ手で入れる。<br>
@@ -376,6 +348,34 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
         <button class="tool-btn" id="btnAddField">＋ 項目を追加</button>
         <button class="tool-btn" id="btnResetFields">すべて既定に戻す</button>
       </div>
+    </div>
+  </section>
+
+  <!-- ===== 共通項目マスタ ===== -->
+  <section class="panel" id="panel-master">
+    <div class="card">
+      <div class="section-eyebrow">Step 3</div>
+      <h2 class="sec-title">共通項目マスタ</h2>
+      <p class="hint">何枚もの写真で同じ値が続く項目を、一度だけまとめて登録します。写真ではここから「選ぶだけ」で各項目が自動で入ります（例：機器、建物、部屋など）。列の内容は「出力項目」タブで自由に決められます。</p>
+      <table class="eq-table">
+        <thead id="eqHead"></thead>
+        <tbody id="eqBody"></tbody>
+      </table>
+      <div style="margin-top:12px;"><button class="tool-btn" id="btnAddEq">＋ 追加</button></div>
+    </div>
+  </section>
+
+  <!-- ===== 作業マスタ ===== -->
+  <section class="panel" id="panel-works">
+    <div class="card">
+      <div class="section-eyebrow">Step 4</div>
+      <h2 class="sec-title">作業マスタ</h2>
+      <p class="hint">よく使う作業名を登録します。写真ではここから「選ぶだけ」で作業内容が入ります（例：圧縮機交換／温度センサ交換／フィルター清掃）。</p>
+      <table class="eq-table">
+        <thead id="workHead"></thead>
+        <tbody id="workBody"></tbody>
+      </table>
+      <div style="margin-top:12px;"><button class="tool-btn" id="btnAddWork">＋ 作業を追加</button></div>
     </div>
   </section>
 
