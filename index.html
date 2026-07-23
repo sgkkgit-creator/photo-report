@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_25</title>
+<title>写真台帳ツール v1_26</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -164,6 +164,15 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 .pdf-note.on{display:flex;}
 .pdf-note b{color:#5A4415;}
 
+/* ---------- 出力項目の設定 ---------- */
+.field-row{display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--line);
+  border-radius:8px; background:#fff; margin-bottom:8px;}
+.field-row.off{background:#F7F8F9; opacity:.7;}
+.field-row .fname{font-size:11px; color:var(--muted); width:78px; white-space:nowrap;}
+.field-row input[type=text]{flex:1; min-width:120px; padding:7px 9px; border:1px solid var(--line); border-radius:7px;}
+.field-row input[type=checkbox]{width:auto;}
+.field-row.dragging{opacity:.55; box-shadow:0 8px 20px rgba(20,30,40,.16);}
+
 .empty-state{text-align:center; color:var(--muted); padding:40px 16px;}
 
 /* ---------- プレビュー / 印刷 ---------- */
@@ -248,7 +257,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_25</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_26</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -266,6 +275,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
     <button class="tab" data-tab="master">機器マスタ <span class="count" id="cntMaster"></span></button>
     <button class="tab" data-tab="works">作業マスタ <span class="count" id="cntWorks"></span></button>
     <button class="tab" data-tab="photos">写真 <span class="count" id="cntPhotos"></span></button>
+    <button class="tab" data-tab="fields">出力項目</button>
     <button class="tab" data-tab="preview">プレビュー</button>
   </div>
 </div>
@@ -340,6 +350,18 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
     <div class="empty-state" id="photoEmpty">まだ写真がありません。上のエリアから追加してください。</div>
   </section>
 
+  <!-- ===== 出力項目 ===== -->
+  <section class="panel" id="panel-fields">
+    <div class="card">
+      <div class="section-eyebrow">出力設定</div>
+      <h2 class="sec-title">出力項目（写真の右側）</h2>
+      <p class="hint">PDFで写真の右に出す項目を、顧客ごとに変えられます。チェックを外すと出力されません（入力したデータは消えず、戻せば再び出ます）。見出しの文字は自由に変更でき、⠿ をドラッグすると並び順が変わります。<br>
+        この設定は写真台帳データに含まれるので、書き出して別のPCで読み込んでも同じ体裁になります。</p>
+      <div id="fieldList"></div>
+      <div style="margin-top:14px;"><button class="tool-btn" id="btnResetFields">既定に戻す</button></div>
+    </div>
+  </section>
+
   <!-- ===== プレビュー ===== -->
   <section class="panel" id="panel-preview">
     <div class="pdf-note no-print" id="pdfNote">
@@ -392,7 +414,41 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
    }
    src / workSrc: '' | 'master'(転記) | 'edited'(転記後に手直し) | 'manual'(手入力)
    ========================================================= */
-let state = { job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true}, equipment:[], works:[], photos:[] };
+let state = { job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true}, equipment:[], works:[], photos:[], fields:null };
+
+/* 出力項目（写真の右側に出る欄）の既定設定
+   key   … データのどの値を出すか（変更不可の内部名）
+   label … PDFに出る見出し（変更可）
+   show  … 出力するか
+   並び順 … この配列の順そのもの（ドラッグで変更） */
+const DEFAULT_FIELDS = [
+  {key:'date',    label:'作業日',   show:true},
+  {key:'room',    label:'撮影場所', show:true},
+  {key:'system',  label:'系統名',   show:true},
+  {key:'model',   label:'機器型名', show:true},
+  {key:'serial',  label:'製造番号', show:true},
+  {key:'work',    label:'作業内容', show:true},
+  {key:'caption', label:'内容',     show:true},
+];
+function normalizeFields(f){
+  const src = Array.isArray(f) ? f : [];
+  const out = [];
+  // 保存済みの並び・設定を優先しつつ、既知のキーだけ拾う
+  src.forEach(x=>{
+    const def = DEFAULT_FIELDS.find(d=>d.key===x.key);
+    if(def && !out.some(o=>o.key===x.key)){
+      out.push({key:def.key, label:(x.label??def.label), show:x.show!==false});
+    }
+  });
+  // 新しく増えた項目は末尾に補完（将来の追加に備える）
+  DEFAULT_FIELDS.forEach(d=>{ if(!out.some(o=>o.key===d.key)) out.push({...d}); });
+  return out;
+}
+/* 写真1件から、指定キーの表示値を取り出す */
+function fieldValue(p, key){
+  if(key==='date') return fmtDate(p.date || state.job.date);
+  return p[key] ?? '';
+}
 
 /* 写真オブジェクトに必要なキーを補完（旧データ読込時の互換用） */
 function normalizePhoto(p){
@@ -857,21 +913,20 @@ function buildLedgerHTML(){
     return html;
   }
   // --- 写真ページ（2ページ目以降） ---
+  // 出力項目は「設定」タブの内容（表示/ラベル/並び順）に従う
+  const fields = normalizeFields(state.fields).filter(f=>{
+    if(!f.show) return false;
+    if(f.key==='date' && !showDate) return false;  // 作業日の表示チェックも尊重
+    return true;
+  });
   html+='<div class="pv-photos">';
   state.photos.forEach((p,i)=>{
+    const rows = fields.map(f=>`<tr><th>${esc(f.label)}</th><td>${esc(fieldValue(p,f.key))}</td></tr>`).join('');
     html+=`<div class="pv-block">
       <div class="pv-photo${p.img?'':' blank'}">${p.img?`<img src="${p.img}">`:'（写真なし）'}</div>
       <div class="pv-meta">
         <span class="pv-no">No.${i+1}</span>
-        <table>
-          ${showDate?`<tr><th>作業日</th><td>${esc(fmtDate(p.date || j.date))}</td></tr>`:''}
-          <tr><th>撮影場所</th><td>${esc(p.room)}</td></tr>
-          <tr><th>系統名</th><td>${esc(p.system)}</td></tr>
-          <tr><th>機器型名</th><td>${esc(p.model)}</td></tr>
-          <tr><th>製造番号</th><td>${esc(p.serial)}</td></tr>
-          <tr><th>作業内容</th><td>${esc(p.work)}</td></tr>
-          <tr><th>内容</th><td>${esc(p.caption)}</td></tr>
-        </table>
+        <table>${rows}</table>
       </div>
     </div>`;
   });
@@ -911,12 +966,87 @@ $('#fileImport').addEventListener('change',e=>{
       state={ job:{ building:(data.job&&data.job.building)||'', date:(data.job&&data.job.date)||'', dateEnd:(data.job&&data.job.dateEnd)||'',
                     overallWork:(data.job&&data.job.overallWork)||'', showDate:!(data.job&&data.job.showDate===false) },
               equipment:data.equipment||[], works:data.works||[],
-              photos:(data.photos||[]).map(normalizePhoto) };
-      bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderPreview(); markDirty();
+              photos:(data.photos||[]).map(normalizePhoto),
+              fields:normalizeFields(data.fields) };
+      bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderFields(); renderPreview(); markDirty();
       alert('読み込みました。');
     }catch(err){ alert('読み込めませんでした：'+err.message); }
   };
   rd.readAsText(f);
+});
+
+/* ---------- 出力項目の設定 ---------- */
+function renderFields(){
+  state.fields = normalizeFields(state.fields);
+  const list=$('#fieldList'); list.innerHTML='';
+  state.fields.forEach((f)=>{
+    const row=document.createElement('div');
+    row.className='field-row'+(f.show?'':' off');
+    row.dataset.key=f.key;
+    row.innerHTML=`
+      <span class="drag-handle" title="ドラッグで並べ替え">⠿</span>
+      <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+        <input type="checkbox" ${f.show?'checked':''}> <span style="font-size:12.5px; font-weight:600;">出力</span>
+      </label>
+      <span class="fname">${esc(defaultLabelOf(f.key))}</span>
+      <input type="text" value="${esc(f.label)}" placeholder="PDFに出す見出し">`;
+    // 表示/非表示
+    row.querySelector('input[type=checkbox]').addEventListener('change',(e)=>{
+      f.show=e.target.checked; row.classList.toggle('off',!f.show); markDirty(); renderPreview();
+    });
+    // ラベル名
+    row.querySelector('input[type=text]').addEventListener('input',(e)=>{
+      f.label=e.target.value; markDirty(); renderPreview();
+    });
+    // ドラッグ並べ替え
+    const h=row.querySelector('.drag-handle');
+    h.addEventListener('pointerdown',(e)=>startFieldDrag(e,row,h));
+    list.appendChild(row);
+  });
+}
+function defaultLabelOf(key){
+  const d=DEFAULT_FIELDS.find(x=>x.key===key); return d?d.label:key;
+}
+function startFieldDrag(e,row,handle){
+  if(e.pointerType==='mouse' && e.button!==0) return;
+  e.preventDefault();
+  const list=$('#fieldList');
+  const fromKey=row.dataset.key;
+  row.classList.add('dragging');
+  try{ handle.setPointerCapture(e.pointerId); }catch(_){}
+  const line=document.createElement('div'); line.className='drop-line';
+  let targetKey=null, atEnd=false, moved=false;
+  const place=(y)=>{
+    const rows=[...list.querySelectorAll('.field-row')].filter(r=>r!==row);
+    for(const r of rows){
+      const b=r.getBoundingClientRect();
+      if(y < b.top + b.height/2){ list.insertBefore(line,r); targetKey=r.dataset.key; atEnd=false; return; }
+    }
+    list.appendChild(line); targetKey=null; atEnd=true;
+  };
+  const onMove=(ev)=>{ moved=true; place(ev.clientY); };
+  const onUp=()=>{
+    handle.removeEventListener('pointermove',onMove);
+    handle.removeEventListener('pointerup',onUp);
+    handle.removeEventListener('pointercancel',onUp);
+    line.remove(); row.classList.remove('dragging');
+    if(moved){
+      const arr=state.fields;
+      const fi=arr.findIndex(x=>x.key===fromKey); if(fi<0) return;
+      const [mv]=arr.splice(fi,1);
+      if(atEnd||targetKey==null) arr.push(mv);
+      else{ const ti=arr.findIndex(x=>x.key===targetKey); arr.splice(ti<0?arr.length:ti,0,mv); }
+      markDirty(); renderFields(); renderPreview();
+    }
+  };
+  handle.addEventListener('pointermove',onMove);
+  handle.addEventListener('pointerup',onUp);
+  handle.addEventListener('pointercancel',onUp);
+}
+$('#btnResetFields').addEventListener('click',()=>{
+  if(!confirm('出力項目の設定を既定に戻しますか？')) return;
+  state.fields=DEFAULT_FIELDS.map(d=>({...d}));
+  markDirty(); renderFields(); renderPreview(); toast('出力項目を既定に戻しました');
 });
 
 /* ---------- 小さい端末ではPDF出力の注意書きを表示 ---------- */
@@ -967,8 +1097,9 @@ $('#clearBackup').addEventListener('click',()=>$('#btnExport').click());
 $('#clearExec').addEventListener('click',async()=>{
   if($('#clearConfirmInput').value.trim()!=='クリア') return; // 二重チェック
   await dbClearAll();
-  state={ job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true}, equipment:[], works:[], photos:[] };
-  bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderPreview(); updateCounts();
+  state={ job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true}, equipment:[], works:[], photos:[],
+          fields:DEFAULT_FIELDS.map(d=>({...d})) };
+  bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderFields(); renderPreview(); updateCounts();
   clearModal.classList.remove('on');
   toast('全データを削除しました');
 });
@@ -987,12 +1118,13 @@ function updateCounts(){
     state={ job:{ building:(saved.job&&saved.job.building)||'', date:(saved.job&&saved.job.date)||'', dateEnd:(saved.job&&saved.job.dateEnd)||'',
                   overallWork:(saved.job&&saved.job.overallWork)||'', showDate:!(saved.job&&saved.job.showDate===false) },
             equipment:saved.equipment||[], works:saved.works||[],
-            photos:(saved.photos||[]).map(normalizePhoto) };
+            photos:(saved.photos||[]).map(normalizePhoto),
+            fields:normalizeFields(saved.fields) };
     // 旧データ互換：現場の作業内容があれば、作業内容が空の写真に引き継ぐ
     const legacyWork = saved.job && saved.job.work;
     if(legacyWork){ state.photos.forEach(p=>{ if(!p.work){ p.work=legacyWork; p.workSrc='manual'; } }); }
   }
-  bindJob(); renderMaster(); renderWorks(); renderPhotos(); updateCounts();
+  bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderFields(); updateCounts();
 })();
 </script>
 <script>
