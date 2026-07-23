@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_24</title>
+<title>写真台帳ツール v1_25</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -158,6 +158,12 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
   word-break:break-all; flex:1; min-width:200px;}
 .path-bar .tool-btn{padding:5px 10px; font-size:12px;}
 
+/* ---------- 小さい端末向けの注意書き ---------- */
+.pdf-note{display:none; align-items:flex-start; gap:8px; background:#FFF8E8; border:1px solid #EBD9A8;
+  border-radius:8px; padding:10px 12px; font-size:12.5px; color:#6B5320; line-height:1.55; margin-bottom:14px;}
+.pdf-note.on{display:flex;}
+.pdf-note b{color:#5A4415;}
+
 .empty-state{text-align:center; color:var(--muted); padding:40px 16px;}
 
 /* ---------- プレビュー / 印刷 ---------- */
@@ -242,7 +248,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_24</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_25</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -336,6 +342,11 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 
   <!-- ===== プレビュー ===== -->
   <section class="panel" id="panel-preview">
+    <div class="pdf-note no-print" id="pdfNote">
+      <span>⚠</span>
+      <span><b>PDF出力はPCで行ってください。</b>スマホ・タブレットでは、ページの区切りやレイアウトが崩れます。
+        この端末では入力までを行い、「写真台帳データ書き出し」で保存してPCで読み込むと、正しいPDFが作れます。</span>
+    </div>
     <div class="preview-toolbar no-print">
       <button class="tool-btn primary" id="btnPdf2">PDF出力</button>
       <span class="hint" style="margin:0;">「PDF出力」→ 送信先を「PDFとして保存」にすると台帳PDFになります。</span>
@@ -908,6 +919,15 @@ $('#fileImport').addEventListener('change',e=>{
   rd.readAsText(f);
 });
 
+/* ---------- 小さい端末ではPDF出力の注意書きを表示 ---------- */
+function updatePdfNote(){
+  // 画面幅で判定（スマホ・タブレット想定）。PCで小窓にしても出るが、案内が出るだけなので実害なし
+  const small = window.innerWidth < 900;
+  $('#pdfNote').classList.toggle('on', small);
+}
+window.addEventListener('resize', updatePdfNote);
+updatePdfNote();
+
 /* ---------- 保存先パスのコピー ---------- */
 $('#btnCopyPath').addEventListener('click',async()=>{
   const path=$('#savePath').textContent.trim();
@@ -976,7 +996,6 @@ function updateCounts(){
 })();
 </script>
 <script>
-/* PWA：サービスワーカー登録（オフライン動作・ホーム画面アプリ化のため） */
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
 }
