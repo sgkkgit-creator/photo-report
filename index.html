@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_27</title>
+<title>写真台帳ツール v1_28</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -173,6 +173,14 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 .field-row input[type=checkbox]{width:auto;}
 .field-row.dragging{opacity:.55; box-shadow:0 8px 20px rgba(20,30,40,.16);}
 
+/* ---------- 出力項目テンプレート ---------- */
+.tpl-bar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:12px; background:#F5F8F9;
+  border:1px solid var(--line); border-radius:8px;}
+.tpl-label{font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--muted); white-space:nowrap;}
+.tpl-bar select{padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:#fff;
+  min-width:180px; flex:1;}
+.tpl-bar .tool-btn{padding:6px 11px; font-size:12.5px;}
+
 .empty-state{text-align:center; color:var(--muted); padding:40px 16px;}
 
 /* ---------- プレビュー / 印刷 ---------- */
@@ -257,7 +265,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_27</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_28</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -346,6 +354,14 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
       <h2 class="sec-title">出力項目（写真の右側）</h2>
       <p class="hint">PDFで写真の右に出す項目を、顧客ごとに変えられます。チェックを外すと出力されません（入力したデータは消えず、戻せば再び出ます）。見出しの文字は自由に変更でき、⠿ をドラッグすると並び順が変わります。<br>
         この設定は写真台帳データに含まれるので、書き出して別のPCで読み込んでも同じ体裁になります。</p>
+      <div class="tpl-bar">
+        <span class="tpl-label">テンプレート</span>
+        <select id="tplSelect"><option value="">（選択してください）</option></select>
+        <button class="tool-btn" id="btnTplApply">読み込む</button>
+        <button class="tool-btn" id="btnTplSave">現在の設定を保存…</button>
+        <button class="tool-btn" id="btnTplDelete">削除</button>
+      </div>
+      <p class="hint" style="margin:8px 0 16px;">よく使う体裁に名前を付けて保存できます（例：A社仕様、簡易版）。テンプレートは<b>この端末に保存</b>され、現場データを読み込んでも消えません。</p>
       <div id="fieldList"></div>
       <div style="margin-top:14px;"><button class="tool-btn" id="btnResetFields">既定に戻す</button></div>
     </div>
@@ -462,6 +478,9 @@ const esc = (s)=> (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':
 
 /* ---------- IndexedDB（同一PC内の自動保存） ---------- */
 const DB_NAME='shashinDaicho', STORE='kv', KEY='state';
+/* テンプレートは現場データ(KEY)とは別のキーに保存する。
+   → 現場データを読み込んでも、全データをクリアしてもテンプレート一覧は消えない */
+const TPL_KEY='fieldTemplates';
 function openDB(){
   return new Promise((res,rej)=>{
     const r=indexedDB.open(DB_NAME,1);
@@ -478,6 +497,19 @@ async function dbSave(obj){
 async function dbLoad(){
   try{ const db=await openDB(); return await new Promise((res,rej)=>{
     const tx=db.transaction(STORE,'readonly'); const g=tx.objectStore(STORE).get(KEY);
+    g.onsuccess=()=>res(g.result||null); g.onerror=()=>rej(g.error);
+  }); }catch(e){ return null; }
+}
+/* 任意キー版（テンプレート用） */
+async function dbPut(key,obj){
+  try{ const db=await openDB(); await new Promise((res,rej)=>{
+    const tx=db.transaction(STORE,'readwrite'); tx.objectStore(STORE).put(obj,key);
+    tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+  }); }catch(e){ console.warn('保存できませんでした',e); }
+}
+async function dbGet(key){
+  try{ const db=await openDB(); return await new Promise((res,rej)=>{
+    const tx=db.transaction(STORE,'readonly'); const g=tx.objectStore(STORE).get(key);
     g.onsuccess=()=>res(g.result||null); g.onerror=()=>rej(g.error);
   }); }catch(e){ return null; }
 }
@@ -1056,6 +1088,52 @@ $('#btnResetFields').addEventListener('click',()=>{
   markDirty(); renderFields(); renderPhotos(); renderPreview(); toast('出力項目を既定に戻しました');
 });
 
+/* ---------- 出力項目テンプレート（この端末に保存） ---------- */
+let fieldTemplates = [];   // [{name, fields:[...]}]
+async function loadTemplates(){
+  const t = await dbGet(TPL_KEY);
+  fieldTemplates = Array.isArray(t) ? t : [];
+  renderTemplateSelect();
+}
+async function saveTemplates(){ await dbPut(TPL_KEY, fieldTemplates); }
+function renderTemplateSelect(){
+  const sel=$('#tplSelect'); const cur=sel.value;
+  sel.innerHTML='<option value="">（選択してください）</option>'+
+    fieldTemplates.map(t=>`<option value="${esc(t.name)}">${esc(t.name)}</option>`).join('');
+  if(fieldTemplates.some(t=>t.name===cur)) sel.value=cur;
+}
+$('#btnTplSave').addEventListener('click',async()=>{
+  const cur=$('#tplSelect').value;
+  const name=(prompt('テンプレート名を入力してください（同じ名前なら上書きします）', cur||'')||'').trim();
+  if(!name) return;
+  const fields=normalizeFields(state.fields).map(f=>({key:f.key,label:f.label,show:f.show}));
+  const i=fieldTemplates.findIndex(t=>t.name===name);
+  if(i>=0){
+    if(!confirm(`「${name}」を上書きしますか？`)) return;
+    fieldTemplates[i]={name,fields};
+  }else{
+    fieldTemplates.push({name,fields});
+  }
+  await saveTemplates(); renderTemplateSelect(); $('#tplSelect').value=name;
+  toast(`テンプレート「${name}」を保存しました`);
+});
+$('#btnTplApply').addEventListener('click',()=>{
+  const name=$('#tplSelect').value;
+  if(!name){ toast('テンプレートを選んでください'); return; }
+  const t=fieldTemplates.find(x=>x.name===name); if(!t) return;
+  state.fields=normalizeFields(t.fields);
+  markDirty(); renderFields(); renderPhotos(); renderPreview();
+  toast(`「${name}」を読み込みました`);
+});
+$('#btnTplDelete').addEventListener('click',async()=>{
+  const name=$('#tplSelect').value;
+  if(!name){ toast('テンプレートを選んでください'); return; }
+  if(!confirm(`テンプレート「${name}」を削除しますか？`)) return;
+  fieldTemplates=fieldTemplates.filter(t=>t.name!==name);
+  await saveTemplates(); renderTemplateSelect();
+  toast(`「${name}」を削除しました`);
+});
+
 /* ---------- 小さい端末ではPDF出力の注意書きを表示 ---------- */
 function updatePdfNote(){
   // 画面幅で判定（スマホ・タブレット想定）。PCで小窓にしても出るが、案内が出るだけなので実害なし
@@ -1132,6 +1210,7 @@ function updateCounts(){
     if(legacyWork){ state.photos.forEach(p=>{ if(!p.work){ p.work=legacyWork; p.workSrc='manual'; } }); }
   }
   bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderFields(); updateCounts();
+  await loadTemplates();   // テンプレートは現場データとは別に読み込む
 })();
 </script>
 <script>
