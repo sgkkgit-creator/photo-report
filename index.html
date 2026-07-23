@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>写真台帳ツール v1_23</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0D7D8A">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="写真台帳">
+<style>
+/* ============================================================
+   写真台帳ツール v1  —  設計メモ（スキルアップ用コメント）
+   ・外部ライブラリ/CDNは一切使わない → オフライン・NAS・iPadでも確実に動く
+   ・保存は IndexedDB（同じPC・同じブラウザ内で自動保存/再開）
+   ・共有は JSON 書き出し/読み込み（読み込みは「完全置換＋確認」）
+   ・PDF は印刷CSS方式（PDF出力ボタン → ブラウザ印刷 → PDFで保存）
+   ・フォントはシステム標準（Yu Gothic/Meiryo/Hiragino）→ フォント崩れが起きない
+   ============================================================ */
+
+:root{
+  --bg:#EEF1F3; --surface:#FFFFFF; --ink:#1B242C; --muted:#66727D;
+  --line:#DDE3E8; --line-2:#EAEEF1;
+  --accent:#0D7D8A; --accent-d:#0A626B; --accent-tint:#E4F2F3;
+  --danger:#B23B2E; --danger-tint:#FBEEEA;
+  --chip:#8A6D3B; --chip-tint:#FBF3E0;
+  --radius:10px; --shadow:0 1px 2px rgba(20,30,40,.06),0 4px 14px rgba(20,30,40,.05);
+  --font: -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:var(--font); color:var(--ink); background:var(--bg);
+  font-size:14px; line-height:1.5; -webkit-text-size-adjust:100%;
+}
+button{font-family:inherit;}
+input,select,textarea{font-family:inherit; font-size:14px; color:var(--ink);}
+:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+
+/* ---------- ヘッダ / ツールバー ---------- */
+.appbar{
+  position:sticky; top:0; z-index:20; background:var(--surface);
+  border-bottom:1px solid var(--line); box-shadow:var(--shadow);
+}
+.appbar-in{max-width:1080px; margin:0 auto; padding:10px 16px;
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+.brand{display:flex; align-items:baseline; gap:10px;}
+.brand .mark{font-weight:800; letter-spacing:.02em; font-size:16px;}
+.brand .ver{font-size:11px; color:var(--muted); letter-spacing:.08em;}
+.save-status{font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px;}
+.save-status .dot{width:7px; height:7px; border-radius:50%; background:#2E9E5B;}
+.save-status.saving .dot{background:#E0A100;}
+.spacer{flex:1;}
+.tool-btn{
+  border:1px solid var(--line); background:var(--surface); color:var(--ink);
+  padding:7px 12px; border-radius:8px; cursor:pointer; font-size:13px; white-space:nowrap;
+}
+.tool-btn:hover{background:#F6F8F9;}
+.tool-btn.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
+.tool-btn.primary:hover{background:var(--accent-d);}
+
+/* ---------- タブ ---------- */
+.tabs{max-width:1080px; margin:0 auto; padding:0 16px; display:flex; gap:2px; overflow-x:auto; -webkit-overflow-scrolling:touch;}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{
+  border:none; background:transparent; padding:12px 14px; cursor:pointer; white-space:nowrap;
+  font-size:14px; color:var(--muted); border-bottom:2px solid transparent; font-weight:600;
+}
+.tab.active{color:var(--accent); border-bottom-color:var(--accent);}
+.tab .count{font-size:11px; color:var(--muted); font-weight:500;}
+
+/* ---------- レイアウト ---------- */
+.wrap{max-width:1080px; margin:0 auto; padding:20px 16px 80px;}
+.panel{display:none;}
+.panel.active{display:block;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:18px;}
+.section-eyebrow{font-size:11px; letter-spacing:.14em; color:var(--muted); font-weight:700; text-transform:uppercase; margin-bottom:2px;}
+h2.sec-title{font-size:17px; margin:2px 0 14px;}
+.hint{font-size:12.5px; color:var(--muted); margin:0 0 14px;}
+
+/* ---------- フォーム ---------- */
+.field{margin-bottom:14px;}
+.field label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:5px; font-weight:600;}
+.field input[type=text], .field input[type=date], .field textarea, .field select{
+  width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:#fff;
+}
+.field textarea{min-height:64px; resize:vertical;}
+.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:0 16px;}
+@media(max-width:640px){.grid-2{grid-template-columns:1fr;}}
+
+/* ---------- 機器マスタ表 ---------- */
+.eq-table{width:100%; border-collapse:collapse; margin-top:4px;}
+.eq-table th{font-size:11.5px; color:var(--muted); text-align:left; font-weight:700; padding:6px 8px; border-bottom:1px solid var(--line);}
+.eq-table td{padding:5px 8px; border-bottom:1px solid var(--line-2); vertical-align:middle;}
+.eq-table input{width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:7px;}
+.eq-table td.act{width:44px; text-align:center;}
+.icon-btn{border:none; background:transparent; cursor:pointer; color:var(--muted); font-size:16px; padding:4px 6px; border-radius:6px; line-height:1;}
+.icon-btn:hover{background:#F2F5F6; color:var(--ink);}
+.icon-btn.del:hover{background:var(--danger-tint); color:var(--danger);}
+.eq-empty{color:var(--muted); font-size:13px; padding:14px 8px;}
+
+/* ---------- 写真ドロップゾーン ---------- */
+.dropzone{
+  border:2px dashed var(--line); border-radius:var(--radius); padding:26px 18px; text-align:center;
+  color:var(--muted); background:var(--surface); margin-bottom:18px; transition:.12s;
+}
+.dropzone.drag{border-color:var(--accent); background:var(--accent-tint); color:var(--accent-d);}
+.dropzone .big{font-size:14.5px; color:var(--ink); font-weight:600; margin-bottom:4px;}
+
+/* ---------- 写真カード ---------- */
+.photo-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:14px; margin-bottom:14px; display:grid;
+  grid-template-columns:200px 1fr; gap:16px;}
+@media(max-width:680px){.photo-card{grid-template-columns:1fr;}}
+.photo-thumb{position:relative; background:#0E1418; border-radius:8px; overflow:hidden;
+  aspect-ratio:4/3; display:flex; align-items:center; justify-content:center;}
+.photo-thumb img{width:100%; height:100%; object-fit:contain;}
+.photo-no{position:absolute; top:6px; left:6px; background:rgba(13,125,138,.92); color:#fff;
+  font-size:12px; font-weight:700; padding:2px 8px; border-radius:6px;}
+.photo-body{min-width:0;}
+.pc-row{display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;}
+.pc-row .eq-select{flex:1; min-width:180px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:#fff;}
+.badge{font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap;}
+.badge.master{background:var(--accent-tint); color:var(--accent-d);}
+.badge.edited{background:var(--chip-tint); color:var(--chip);}
+.mini-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px 12px;}
+@media(max-width:520px){.mini-grid{grid-template-columns:1fr;}}
+.mini-field label{display:block; font-size:11px; color:var(--muted); margin-bottom:3px; font-weight:600;}
+.mini-field input{width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:#fff;}
+.mini-field input.from-master{background:var(--accent-tint); border-color:#BFE1E4;}
+.cap-field{margin-top:8px;}
+.cap-field label{display:block; font-size:11px; color:var(--muted); margin-bottom:3px; font-weight:600;}
+.cap-field input{width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:7px;}
+.pc-foot{display:flex; align-items:center; gap:6px; margin-top:10px;}
+.pc-foot .grow{flex:1;}
+.link-btn{border:none; background:transparent; color:var(--accent); cursor:pointer; font-size:12.5px; padding:4px 6px; border-radius:6px; font-weight:600;}
+.link-btn:hover{background:var(--accent-tint);}
+.order-btn{border:1px solid var(--line); background:#fff; cursor:pointer; width:30px; height:30px; border-radius:7px; color:var(--muted); font-size:14px;}
+.order-btn:hover{background:#F4F7F8; color:var(--ink);}
+.order-btn:disabled{opacity:.35; cursor:default;}
+.drag-handle{display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+  border:1px solid var(--line); border-radius:7px; color:var(--muted); cursor:grab; font-size:16px;
+  touch-action:none; user-select:none; -webkit-user-select:none;}
+.drag-handle:hover{background:#F4F7F8; color:var(--ink);}
+.drag-handle:active{cursor:grabbing;}
+.photo-card.dragging{opacity:.55; box-shadow:0 10px 26px rgba(20,30,40,.18);}
+.drop-line{height:4px; background:var(--accent); border-radius:2px; margin:5px 2px; pointer-events:none;}
+
+/* ---------- 保存先パスの表示（ツールバー直下） ---------- */
+.path-bar{max-width:1080px; margin:0 auto; padding:0 16px 10px;
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.path-label{font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--muted); white-space:nowrap;}
+.path-text{font-family:Consolas,"Courier New",monospace; font-size:12px; color:var(--ink);
+  background:#F5F8F9; border:1px solid var(--line); border-radius:6px; padding:5px 9px;
+  word-break:break-all; flex:1; min-width:200px;}
+.path-bar .tool-btn{padding:5px 10px; font-size:12px;}
+
+.empty-state{text-align:center; color:var(--muted); padding:40px 16px;}
+
+/* ---------- プレビュー / 印刷 ---------- */
+.preview-toolbar{display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap;}
+.sheet{background:#fff; margin:0 auto;}
+/* 表紙 */
+.pv-cover{border:1px solid #333; margin-bottom:16px; min-height:220px; display:flex; align-items:center; justify-content:center; padding:40px 20px;}
+.cover-box{width:100%; max-width:520px;}
+.cover-h{text-align:center; font-size:24px; font-weight:800; letter-spacing:.1em; margin-bottom:26px;}
+.cover-tbl{width:100%; border-collapse:collapse; font-size:15px;}
+.cover-tbl th{text-align:left; width:120px; color:var(--muted); font-weight:700; padding:12px 10px; border-bottom:1px solid #ddd; vertical-align:top; font-size:13px;}
+.cover-tbl td{padding:12px 10px; border-bottom:1px solid #ddd; vertical-align:top;}
+.pv-block{border:1px solid #333; margin-bottom:12px; padding:10px; display:grid; grid-template-columns:1fr 260px; gap:12px;}
+.pv-photo{background:#f0f2f3; border:1px solid #ccc; min-height:180px; display:flex; align-items:center; justify-content:center; overflow:hidden;}
+.pv-photo img{max-width:100%; max-height:340px; object-fit:contain;}
+.pv-photo.blank{color:#aaa; font-size:13px;}
+.pv-meta{font-size:12.5px;}
+.pv-meta table{width:100%; border-collapse:collapse;}
+.pv-meta th{text-align:left; color:var(--muted); font-weight:700; width:82px; padding:4px 6px; vertical-align:top; border-bottom:1px solid #eee; font-size:11.5px;}
+.pv-meta td{padding:4px 6px; vertical-align:top; border-bottom:1px solid #eee;}
+.pv-no{display:inline-block; background:#333; color:#fff; font-weight:700; font-size:11px; padding:2px 8px; border-radius:4px; margin-bottom:6px;}
+
+/* ===== 印刷（PDF出力）専用 ===== */
+@media print{
+  @page{size:A4 portrait; margin:12mm;}
+  body{background:#fff;}
+  .appbar,.tabs,.no-print{display:none !important;}
+  .wrap{max-width:none; margin:0; padding:0;}
+  .panel{display:none !important;}
+  #printArea{display:block !important;}
+  /* 表紙は1ページ独立 */
+  .pv-cover{min-height:240mm; margin:0; break-after:page; page-break-after:always; border:1px solid #333;}
+  /* 写真は1ページ3枚を目安に */
+  .pv-block{break-inside:avoid; page-break-inside:avoid; min-height:82mm; margin-bottom:4mm; padding:6px;}
+  .pv-photo{min-height:52mm;}
+  .pv-photo img{max-height:64mm;}
+  .pv-meta th,.pv-meta td{padding:3px 6px; font-size:11px;}
+  .pv-meta th{width:74px;}
+  .pv-no{font-size:10px; margin-bottom:4px;}
+}
+#printArea{display:none;}
+
+/* ---------- 処理中オーバーレイ / お知らせ ---------- */
+.busy-overlay{position:fixed; inset:0; z-index:50; background:rgba(20,28,34,.42);
+  display:none; align-items:center; justify-content:center;}
+.busy-overlay.on{display:flex;}
+.busy-box{background:#fff; border-radius:12px; padding:20px 26px; box-shadow:var(--shadow);
+  font-size:14px; font-weight:600; display:flex; align-items:center; gap:12px;}
+.spin{width:20px; height:20px; border:3px solid var(--line); border-top-color:var(--accent);
+  border-radius:50%; animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px);
+  background:#1B242C; color:#fff; padding:11px 18px; border-radius:10px; font-size:13.5px;
+  z-index:60; opacity:0; transition:.22s; pointer-events:none; max-width:88vw; text-align:center;}
+.toast.on{opacity:1; transform:translateX(-50%) translateY(0);}
+
+/* ---------- 確認モーダル（データクリア） ---------- */
+.tool-btn:disabled{opacity:.45; cursor:default;}
+.tool-btn.danger{border-color:var(--danger); color:var(--danger);}
+.tool-btn.danger:hover{background:var(--danger-tint);}
+.modal-overlay{position:fixed; inset:0; z-index:70; background:rgba(20,28,34,.5); display:none; align-items:center; justify-content:center; padding:20px;}
+.modal-overlay.on{display:flex;}
+.modal-box{background:#fff; border-radius:14px; padding:22px; max-width:440px; width:100%; box-shadow:var(--shadow);}
+.modal-title{font-size:17px; font-weight:800; margin-bottom:10px;}
+.modal-text{font-size:13.5px; color:var(--ink); margin:0 0 14px; line-height:1.6;}
+.modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:6px;}
+.danger-zone{margin-top:16px; border:1px solid #EAD3CE; background:#FEF8F7;}
+</style>
+</head>
+<body>
+
+<!-- ========== ツールバー ========== -->
+<div class="appbar no-print">
+  <div class="appbar-in">
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_23</span></div>
+    <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
+    <div class="spacer"></div>
+    <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
+    <button class="tool-btn" id="btnImport">写真台帳データ読み込み</button>
+    <button class="tool-btn primary" id="btnPdf">PDF出力</button>
+    <input type="file" id="fileImport" accept="application/json,.json" hidden>
+  </div>
+  <div class="path-bar">
+    <span class="path-label">データ保存先</span>
+    <span class="path-text" id="savePath">\\LANDISK-SGKK01\disk\作業写真一括\写真台帳ツール用データ</span>
+    <button class="tool-btn" id="btnCopyPath">パスをコピー</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-tab="job">現場情報</button>
+    <button class="tab" data-tab="master">機器マスタ <span class="count" id="cntMaster"></span></button>
+    <button class="tab" data-tab="works">作業マスタ <span class="count" id="cntWorks"></span></button>
+    <button class="tab" data-tab="photos">写真 <span class="count" id="cntPhotos"></span></button>
+    <button class="tab" data-tab="preview">プレビュー</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ===== 現場情報 ===== -->
+  <section class="panel active" id="panel-job">
+    <div class="card">
+      <div class="section-eyebrow">Step 1</div>
+      <h2 class="sec-title">現場情報</h2>
+      <p class="hint">現場ごとに最初に一度だけ入力します。ここは表紙（PDF1ページ目）に表示されます。作業日（開始）は各写真の既定値になり、写真ごとに変えられます。表紙には期間（開始〜終了）で表示されます。</p>
+      <div class="grid-2">
+        <div class="field"><label>現場名（建物名称）</label><input type="text" id="job-building" placeholder="例：総合化工株式会社"></div>
+        <div class="field"><label>全体作業内容（表紙用）</label><input type="text" id="job-overall" placeholder="例：空調機整備作業"></div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label>作業日（開始）</label><input type="date" id="job-date"></div>
+        <div class="field"><label>作業日（終了）</label><input type="date" id="job-date-end"></div>
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600;">
+          <input type="checkbox" id="job-showdate" style="width:auto;"> 作業日を出力（表紙・各写真）に表示する
+        </label>
+      </div>
+    </div>
+
+    <div class="card danger-zone">
+      <div class="section-eyebrow" style="color:var(--danger);">危険な操作</div>
+      <h2 class="sec-title" style="font-size:15px;">全データをクリア</h2>
+      <p class="hint">現場情報・機器マスタ・作業マスタ・写真をすべて削除し、この端末の自動保存も消します。<b>元に戻せません。</b></p>
+      <button class="tool-btn danger" id="btnClearAll">全データをクリア…</button>
+    </div>
+  </section>
+
+  <!-- ===== 機器マスタ ===== -->
+  <section class="panel" id="panel-master">
+    <div class="card">
+      <div class="section-eyebrow">Step 2</div>
+      <h2 class="sec-title">機器マスタ</h2>
+      <p class="hint">現場にある機器を一度だけ登録します。写真ではここから「選ぶだけ」で系統名・型名・製番・部屋が自動で入ります。</p>
+      <table class="eq-table">
+        <thead><tr><th>系統名</th><th>機器型名</th><th>製造番号</th><th>撮影場所(部屋)</th><th class="act"></th></tr></thead>
+        <tbody id="eqBody"></tbody>
+      </table>
+      <div style="margin-top:12px;"><button class="tool-btn" id="btnAddEq">＋ 機器を追加</button></div>
+    </div>
+  </section>
+
+  <!-- ===== 作業マスタ ===== -->
+  <section class="panel" id="panel-works">
+    <div class="card">
+      <div class="section-eyebrow">Step 2</div>
+      <h2 class="sec-title">作業マスタ</h2>
+      <p class="hint">よく使う作業名を登録します。写真ではここから「選ぶだけ」で作業内容が入ります（例：圧縮機交換／温度センサ交換／フィルター清掃）。</p>
+      <table class="eq-table">
+        <thead><tr><th>作業内容</th><th class="act"></th></tr></thead>
+        <tbody id="workBody"></tbody>
+      </table>
+      <div style="margin-top:12px;"><button class="tool-btn" id="btnAddWork">＋ 作業を追加</button></div>
+    </div>
+  </section>
+
+  <!-- ===== 写真 ===== -->
+  <section class="panel" id="panel-photos">
+    <div class="dropzone" id="dropzone">
+      <div class="big"><button class="tool-btn primary" id="btnPick" style="font-size:14px;">写真を選ぶ</button></div>
+      <div style="margin-top:6px;">スマホ・タブレットは上のボタンから（複数可）。PCはこの枠へドラッグ&ドロップでもOK。</div>
+      <input type="file" id="filePhotos" accept="image/*" multiple hidden>
+    </div>
+    <div id="photoList"></div>
+    <div class="empty-state" id="photoEmpty">まだ写真がありません。上のエリアから追加してください。</div>
+  </section>
+
+  <!-- ===== プレビュー ===== -->
+  <section class="panel" id="panel-preview">
+    <div class="preview-toolbar no-print">
+      <button class="tool-btn primary" id="btnPdf2">PDF出力</button>
+      <span class="hint" style="margin:0;">「PDF出力」→ 送信先を「PDFとして保存」にすると台帳PDFになります。</span>
+    </div>
+    <div class="sheet" id="previewSheet"></div>
+  </section>
+
+</div>
+
+<!-- 印刷専用の描画先（画面では非表示、印刷時のみ表示） -->
+<div id="printArea"></div>
+
+<div class="busy-overlay" id="busy"><div class="busy-box"><span class="spin"></span><span id="busyText">処理中…</span></div></div>
+<div class="toast" id="toast"></div>
+
+<!-- データクリア確認モーダル -->
+<div class="modal-overlay" id="clearModal">
+  <div class="modal-box">
+    <div class="modal-title">全データをクリアしますか？</div>
+    <p class="modal-text">現場情報・機器マスタ・作業マスタ・写真、そしてこの端末の自動保存をすべて削除します。<b>元に戻せません。</b><br>心配なら先にバックアップを取ってください。</p>
+    <button class="tool-btn" id="clearBackup" style="margin-bottom:16px;">先に写真台帳データを書き出す（バックアップ）</button>
+    <div class="field"><label>続けるには下の欄に「クリア」と入力してください</label>
+      <input type="text" id="clearConfirmInput" placeholder="クリア" autocomplete="off"></div>
+    <div class="modal-actions">
+      <button class="tool-btn" id="clearCancel">キャンセル</button>
+      <button class="tool-btn danger" id="clearExec" disabled style="background:var(--danger); border-color:var(--danger); color:#fff;">クリアを実行</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================
+   データ構造
+   state = {
+     job:{building, date, overallWork, showDate},   // building=現場名, date=作業日(既定), overallWork=全体作業内容, showDate=作業日表示
+     equipment:[{id, system, model, serial, room}],   // 機器マスタ
+     works:[{id, name}],                              // 作業マスタ
+     photos:[{id, img, date,                          // date=その写真の作業日
+              equipId, system, model, serial, room, src,   // 機器（選択/上書き）
+              workId, work, workSrc,                        // 作業内容（選択/上書き）
+              caption}]                                     // 写真内容（1枚ごと）
+   }
+   src / workSrc: '' | 'master'(転記) | 'edited'(転記後に手直し) | 'manual'(手入力)
+   ========================================================= */
+let state = { job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true}, equipment:[], works:[], photos:[] };
+
+/* 写真オブジェクトに必要なキーを補完（旧データ読込時の互換用） */
+function normalizePhoto(p){
+  return Object.assign({id:uid(), img:'', date:'', equipId:'', system:'',model:'',serial:'',room:'', src:'',
+                        workId:'', work:'', workSrc:'', caption:''}, p);
+}
+
+const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const $ = (s,r=document)=>r.querySelector(s);
+const esc = (s)=> (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- IndexedDB（同一PC内の自動保存） ---------- */
+const DB_NAME='shashinDaicho', STORE='kv', KEY='state';
+function openDB(){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open(DB_NAME,1);
+    r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE); };
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  });
+}
+async function dbSave(obj){
+  try{ const db=await openDB(); await new Promise((res,rej)=>{
+    const tx=db.transaction(STORE,'readwrite'); tx.objectStore(STORE).put(obj,KEY);
+    tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+  }); }catch(e){ console.warn('保存できませんでした',e); }
+}
+async function dbLoad(){
+  try{ const db=await openDB(); return await new Promise((res,rej)=>{
+    const tx=db.transaction(STORE,'readonly'); const g=tx.objectStore(STORE).get(KEY);
+    g.onsuccess=()=>res(g.result||null); g.onerror=()=>rej(g.error);
+  }); }catch(e){ return null; }
+}
+
+let saveTimer=null;
+function markDirty(){
+  const el=$('#saveStatus'); el.classList.add('saving'); $('#saveText').textContent='保存中…';
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(async()=>{
+    await dbSave(state);
+    el.classList.remove('saving'); $('#saveText').textContent='保存済み';
+  },500);
+}
+
+/* ---------- 画像の自動縮小（長辺1600px / JPEG） ---------- */
+function downscale(file, maxEdge=1600, quality=0.85){
+  return new Promise((res)=>{
+    const url=URL.createObjectURL(file); const img=new Image();
+    img.onload=()=>{
+      let {width:w,height:h}=img; const scale=Math.min(1, maxEdge/Math.max(w,h));
+      w=Math.round(w*scale); h=Math.round(h*scale);
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      res(cv.toDataURL('image/jpeg',quality));
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); res(null); };
+    img.src=url;
+  });
+}
+
+/* ---------- タブ切り替え ---------- */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    $('#panel-'+t.dataset.tab).classList.add('active');
+    if(t.dataset.tab==='preview') renderPreview();
+  });
+});
+
+/* ---------- 現場情報 ---------- */
+function bindJob(){
+  const map={'#job-building':'building','#job-date':'date','#job-date-end':'dateEnd','#job-overall':'overallWork'};
+  Object.entries(map).forEach(([sel,key])=>{
+    const el=$(sel);
+    el.value=state.job[key]||'';
+    el.oninput=()=>{ state.job[key]=el.value; markDirty(); };
+  });
+  const chk=$('#job-showdate');
+  chk.checked = state.job.showDate!==false;
+  chk.onchange=()=>{ state.job.showDate=chk.checked; markDirty(); };
+}
+
+/* ---------- 機器マスタ ---------- */
+function eqLabel(e){
+  const parts=[e.system||'(系統なし)', e.model||'(型名なし)', e.serial||'(製番なし)', e.room||'(場所なし)'];
+  return parts.join(' / ');
+}
+function renderMaster(){
+  const body=$('#eqBody'); body.innerHTML='';
+  if(state.equipment.length===0){
+    body.innerHTML='<tr><td colspan="5" class="eq-empty">機器がまだありません。「＋ 機器を追加」から登録してください。</td></tr>';
+  }
+  state.equipment.forEach((e)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><input data-k="system" placeholder="系統名"></td>
+      <td><input data-k="model" placeholder="機器型名"></td>
+      <td><input data-k="serial" placeholder="製造番号"></td>
+      <td><input data-k="room" placeholder="部屋"></td>
+      <td class="act"><button class="icon-btn del" title="削除">✕</button></td>`;
+    tr.querySelectorAll('input').forEach(inp=>{
+      inp.value=e[inp.dataset.k]||'';
+      inp.addEventListener('input',()=>{ e[inp.dataset.k]=inp.value; markDirty(); refreshPhotoSelects(); });
+    });
+    tr.querySelector('.del').addEventListener('click',()=>{
+      state.equipment=state.equipment.filter(x=>x.id!==e.id);
+      markDirty(); renderMaster(); refreshPhotoSelects(); updateCounts();
+    });
+    body.appendChild(tr);
+  });
+  updateCounts();
+}
+$('#btnAddEq').addEventListener('click',()=>{
+  state.equipment.push({id:uid(),system:'',model:'',serial:'',room:''});
+  markDirty(); renderMaster(); refreshPhotoSelects();
+});
+
+/* ---------- 作業マスタ ---------- */
+function renderWorks(){
+  const body=$('#workBody'); body.innerHTML='';
+  if(state.works.length===0){
+    body.innerHTML='<tr><td colspan="2" class="eq-empty">作業がまだありません。「＋ 作業を追加」から登録してください。</td></tr>';
+  }
+  state.works.forEach((w)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><input data-k="name" placeholder="作業内容（例：圧縮機交換）"></td>
+      <td class="act"><button class="icon-btn del" title="削除">✕</button></td>`;
+    const inp=tr.querySelector('input');
+    inp.value=w.name||'';
+    inp.addEventListener('input',()=>{ w.name=inp.value; markDirty(); refreshWorkSelects(); });
+    tr.querySelector('.del').addEventListener('click',()=>{
+      state.works=state.works.filter(x=>x.id!==w.id);
+      markDirty(); renderWorks(); refreshWorkSelects(); updateCounts();
+    });
+    body.appendChild(tr);
+  });
+  updateCounts();
+}
+$('#btnAddWork').addEventListener('click',()=>{
+  state.works.push({id:uid(),name:''});
+  markDirty(); renderWorks(); refreshWorkSelects();
+});
+
+/* ---------- 補助：処理中表示 / お知らせ ---------- */
+function showBusy(t){ $('#busyText').textContent=t; $('#busy').classList.add('on'); }
+function hideBusy(){ $('#busy').classList.remove('on'); }
+let toastTimer=null;
+function toast(msg){ const el=$('#toast'); el.textContent=msg; el.classList.add('on');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('on'),3200); }
+
+/* 原本をそのまま dataURL 化するフォールバック（縮小に失敗したとき用） */
+function readAsDataURL(file){
+  return new Promise((res)=>{ const r=new FileReader();
+    r.onload=()=>res(r.result); r.onerror=()=>res(null); r.readAsDataURL(file); });
+}
+/* 画像ファイルらしいか（スマホは type が空のことがあるので拡張子も見る） */
+function looksImage(f){
+  return (f.type && f.type.startsWith('image/')) || f.type==='' ||
+         /\.(jpe?g|png|gif|webp|heic|heif|bmp|tiff?)$/i.test(f.name||'');
+}
+
+/* ---------- 写真：追加 ---------- */
+async function addPhotoFiles(files){
+  const imgs=[...files].filter(looksImage);
+  if(imgs.length===0){ toast('画像ファイルが見つかりませんでした'); return; }
+  let ok=0, ng=0;
+  showBusy(`写真を処理中… 0/${imgs.length}`);
+  for(let i=0;i<imgs.length;i++){
+    showBusy(`写真を処理中… ${i+1}/${imgs.length}`);
+    let data=null;
+    try{ data=await downscale(imgs[i]); }catch(e){ data=null; }
+    if(!data){ data=await readAsDataURL(imgs[i]); }   // 縮小失敗→原本で取り込む
+    if(data){
+      // 直前の写真から「機器＋作業内容」を引き継ぐ（写真内容・作業日は引き継がない）
+      // 作業日は未設定のまま → 表示/出力時に「作業開始日」へフォールバック（手動変更で上書き）
+      const prev=state.photos[state.photos.length-1];
+      const inherit = prev ? {
+        equipId:prev.equipId, system:prev.system, model:prev.model, serial:prev.serial, room:prev.room, src:prev.src,
+        workId:prev.workId, work:prev.work, workSrc:prev.workSrc
+      } : {};
+      state.photos.push(normalizePhoto(Object.assign({id:uid(), img:data, caption:''}, inherit)));
+      ok++;
+    }
+    else{ ng++; }
+    await new Promise(r=>setTimeout(r,0)); // 画面を固めない
+  }
+  hideBusy();
+  markDirty(); renderPhotos();
+  toast(ng>0 ? `${ok}枚追加しました（${ng}枚は読み込めませんでした）` : `${ok}枚追加しました`);
+}
+$('#btnPick').addEventListener('click',()=>$('#filePhotos').click());
+$('#filePhotos').addEventListener('change',e=>{ addPhotoFiles(e.target.files); e.target.value=''; });
+const dz=$('#dropzone');
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
+dz.addEventListener('drop',e=>{ if(e.dataTransfer?.files?.length) addPhotoFiles(e.dataTransfer.files); });
+
+/* ---------- 写真：機器選択のプルダウン中身 ---------- */
+function eqOptionsHTML(selectedId){
+  let html='<option value="__none__">（未選択／下欄に手入力）</option>';
+  state.equipment.forEach(e=>{
+    html+=`<option value="${e.id}" ${e.id===selectedId?'selected':''}>${esc(eqLabel(e))}</option>`;
+  });
+  return html;
+}
+function refreshPhotoSelects(){
+  document.querySelectorAll('.eq-select').forEach(sel=>{
+    const p=state.photos.find(x=>x.id===sel.dataset.pid); if(!p) return;
+    sel.innerHTML=eqOptionsHTML(p.equipId||'__none__');
+  });
+}
+function workOptionsHTML(selectedId){
+  let html='<option value="__none__">（未選択／下欄に手入力）</option>';
+  state.works.forEach(w=>{
+    html+=`<option value="${w.id}" ${w.id===selectedId?'selected':''}>${esc(w.name||'(名称なし)')}</option>`;
+  });
+  return html;
+}
+function refreshWorkSelects(){
+  document.querySelectorAll('.work-select').forEach(sel=>{
+    const p=state.photos.find(x=>x.id===sel.dataset.pid); if(!p) return;
+    sel.innerHTML=workOptionsHTML(p.workId||'__none__');
+  });
+}
+
+/* ---------- 写真：一覧描画 ---------- */
+function renderPhotos(){
+  const list=$('#photoList'); list.innerHTML='';
+  $('#photoEmpty').style.display=state.photos.length? 'none':'block';
+  state.photos.forEach((p,idx)=>{
+    const card=document.createElement('div'); card.className='photo-card'; card.dataset.pid=p.id;
+    const badge = p.src==='master' ? '<span class="badge master">マスタ</span>'
+                : p.src==='edited' ? '<span class="badge edited">編集</span>' : '';
+    const wbadge = p.workSrc==='master' ? '<span class="badge master">マスタ</span>'
+                 : p.workSrc==='edited' ? '<span class="badge edited">編集</span>' : '';
+    card.innerHTML=`
+      <div class="photo-thumb"><span class="photo-no">No.${idx+1}</span><img src="${p.img}" alt=""></div>
+      <div class="photo-body">
+        <div class="mini-field" style="margin-bottom:10px; max-width:220px;"><label>作業日</label>
+          <input type="date" data-k="date" value="${esc(p.date || state.job.date || '')}"></div>
+        <div class="pc-row">
+          <select class="eq-select" data-pid="${p.id}">${eqOptionsHTML(p.equipId||'__none__')}</select>
+          <span class="badge-holder">${badge}</span>
+        </div>
+        <div class="mini-grid">
+          <div class="mini-field"><label>撮影場所(部屋)</label><input data-k="room" value="${esc(p.room)}"></div>
+          <div class="mini-field"><label>系統名</label><input data-k="system" value="${esc(p.system)}"></div>
+          <div class="mini-field"><label>機器型名</label><input data-k="model" value="${esc(p.model)}"></div>
+          <div class="mini-field"><label>製造番号</label><input data-k="serial" value="${esc(p.serial)}"></div>
+        </div>
+        <div class="pc-row" style="margin:12px 0 6px;">
+          <select class="work-select" data-pid="${p.id}">${workOptionsHTML(p.workId||'__none__')}</select>
+          <span class="wbadge-holder">${wbadge}</span>
+        </div>
+        <div class="mini-field"><label>作業内容</label>
+          <input data-k="work" value="${esc(p.work)}" placeholder="例：圧縮機交換" ${p.workSrc==='master'?'class="from-master"':''}></div>
+        <button class="link-btn add-work-master" style="display:none;">＋ この作業をマスタに追加</button>
+        <div class="cap-field"><label>写真内容（この1枚が何か・写真ごとに入力）</label>
+          <input data-k="caption" value="${esc(p.caption)}" placeholder="例：交換前 / 交換後 / 機器外観"></div>
+        <div class="pc-foot">
+          <span class="drag-handle" title="ドラッグで並べ替え" aria-label="ドラッグで並べ替え">⠿</span>
+          <button class="order-btn up" title="上へ" ${idx===0?'disabled':''}>▲</button>
+          <button class="order-btn down" title="下へ" ${idx===state.photos.length-1?'disabled':''}>▼</button>
+          <span class="grow"></span>
+          <button class="link-btn add-master" style="display:none;">＋ この機器をマスタに追加</button>
+          <button class="icon-btn del" title="この写真を削除">🗑</button>
+        </div>
+      </div>`;
+
+    // 機器プルダウン
+    const sel=card.querySelector('.eq-select');
+    sel.addEventListener('change',()=>{
+      const v=sel.value;
+      if(v==='__none__'){ p.equipId=''; p.system=''; p.model=''; p.serial=''; p.room=''; p.src=''; }
+      else{
+        const e=state.equipment.find(x=>x.id===v);
+        if(e){ p.equipId=e.id; p.system=e.system; p.model=e.model; p.serial=e.serial; p.room=e.room; p.src='master'; }
+      }
+      markDirty(); renderPhotos();
+    });
+
+    // 機器4項目：手直し（上書き）※mini-grid内だけを対象にする
+    card.querySelectorAll('.mini-grid .mini-field input').forEach(inp=>{
+      if(p.src==='master') inp.classList.add('from-master');
+      inp.addEventListener('input',()=>{
+        p[inp.dataset.k]=inp.value;
+        if(p.src==='master'){ p.src='edited'; } // 転記後に触ったら「編集」表示に
+        markDirty(); updateBadge(card,p); updateAddMaster(card,p); inp.classList.remove('from-master');
+      });
+    });
+
+    // 作業内容プルダウン
+    const wsel=card.querySelector('.work-select');
+    wsel.addEventListener('change',()=>{
+      const v=wsel.value;
+      if(v==='__none__'){ p.workId=''; p.work=''; p.workSrc=''; }
+      else{
+        const w=state.works.find(x=>x.id===v);
+        if(w){ p.workId=w.id; p.work=w.name; p.workSrc='master'; }
+      }
+      markDirty(); renderPhotos();
+    });
+    // 作業内容：手直し（上書き）
+    const winp=card.querySelector('[data-k="work"]');
+    winp.addEventListener('input',()=>{
+      p.work=winp.value;
+      if(p.workSrc==='master'){ p.workSrc='edited'; }
+      else if(!p.workSrc){ p.workSrc='manual'; }
+      markDirty(); updateWBadge(card,p); updateAddWorkMaster(card,p); winp.classList.remove('from-master');
+    });
+    // 作業をマスタに追加
+    const awm=card.querySelector('.add-work-master');
+    awm.addEventListener('click',()=>{
+      const w={id:uid(),name:p.work}; state.works.push(w);
+      p.workId=w.id; p.workSrc='master';
+      markDirty(); renderWorks(); renderPhotos();
+    });
+    updateAddWorkMaster(card,p);
+
+    // 作業日（写真ごと）
+    const dinp=card.querySelector('[data-k="date"]');
+    dinp.addEventListener('input',()=>{ p.date=dinp.value; markDirty(); });
+
+    // 写真内容（キャプション）
+    const cap=card.querySelector('[data-k="caption"]');
+    cap.addEventListener('input',()=>{ p.caption=cap.value; markDirty(); });
+
+    // 並べ替え（ボタン）
+    card.querySelector('.up').addEventListener('click',()=>move(idx,-1));
+    card.querySelector('.down').addEventListener('click',()=>move(idx,1));
+    // 並べ替え（ドラッグ：マウス・タッチ両対応）
+    const handle=card.querySelector('.drag-handle');
+    handle.addEventListener('pointerdown',(e)=>startDrag(e, card, handle));
+    // 削除
+    card.querySelector('.del').addEventListener('click',()=>{
+      if(confirm('この写真を削除しますか？')){ state.photos.splice(idx,1); markDirty(); renderPhotos(); }
+    });
+    // マスタに追加
+    const am=card.querySelector('.add-master');
+    am.addEventListener('click',()=>{
+      const e={id:uid(),system:p.system,model:p.model,serial:p.serial,room:p.room};
+      state.equipment.push(e); p.equipId=e.id; p.src='master';
+      markDirty(); renderMaster(); renderPhotos();
+    });
+    updateAddMaster(card,p);
+
+    list.appendChild(card);
+  });
+  updateCounts();
+}
+function updateBadge(card,p){
+  const h=card.querySelector('.badge-holder');
+  h.innerHTML = p.src==='master' ? '<span class="badge master">マスタ</span>'
+              : p.src==='edited' ? '<span class="badge edited">編集</span>' : '';
+}
+function updateAddMaster(card,p){
+  // 手入力/編集で、かつ同じ機器がマスタに無いときだけ「マスタに追加」を出す
+  const am=card.querySelector('.add-master'); if(!am) return;
+  const hasContent = p.model||p.serial;
+  const inMaster = state.equipment.some(e=>e.model===p.model && e.serial===p.serial && e.room===p.room && (p.model||p.serial));
+  am.style.display = (hasContent && !inMaster && p.src!=='master') ? 'inline-block':'none';
+}
+function updateWBadge(card,p){
+  const h=card.querySelector('.wbadge-holder'); if(!h) return;
+  h.innerHTML = p.workSrc==='master' ? '<span class="badge master">マスタ</span>'
+              : p.workSrc==='edited' ? '<span class="badge edited">編集</span>' : '';
+}
+function updateAddWorkMaster(card,p){
+  const b=card.querySelector('.add-work-master'); if(!b) return;
+  const has=(p.work||'').trim()!=='';
+  const inMaster=state.works.some(w=>w.name===p.work);
+  b.style.display = (has && !inMaster) ? 'inline-block':'none';
+}
+function move(i,dir){
+  const j=i+dir; if(j<0||j>=state.photos.length) return;
+  [state.photos[i],state.photos[j]]=[state.photos[j],state.photos[i]];
+  markDirty(); renderPhotos();
+}
+/* ドラッグ並べ替え（マウス・タッチ両対応）
+   ドラッグ中はカード自体を動かさず「挿入位置の線」だけ表示し、離した時にstateへ確定する。
+   （ドラッグ中にカードをDOM移動するとポインタ捕捉が外れて不安定になるため、この方式にしている） */
+function startDrag(e, card, handle){
+  if(e.pointerType==='mouse' && e.button!==0) return;
+  e.preventDefault();
+  const list=$('#photoList');
+  const fromId=card.dataset.pid;
+  card.classList.add('dragging');
+  try{ handle.setPointerCapture(e.pointerId); }catch(_){}
+  const line=document.createElement('div'); line.className='drop-line';
+  let targetPid=null, atEnd=false, didMove=false;
+  let lastY=e.clientY, scrollTimer=null;
+
+  // 挿入位置の線を、現在のポインタY座標にあわせて置き直す
+  const placeLine=(y)=>{
+    const cards=[...list.querySelectorAll('.photo-card')].filter(c=>c!==card);
+    for(const c of cards){
+      const r=c.getBoundingClientRect();
+      if(y < r.top + r.height/2){ list.insertBefore(line, c); targetPid=c.dataset.pid; atEnd=false; return; }
+    }
+    list.appendChild(line); targetPid=null; atEnd=true;
+  };
+  // 画面端に近づいたら自動スクロール（端に近いほど速い）
+  const EDGE=90, MAXSPEED=22;
+  const autoScroll=()=>{
+    const h=window.innerHeight;
+    let dy=0;
+    if(lastY < EDGE) dy = -Math.ceil((EDGE-lastY)/EDGE*MAXSPEED);
+    else if(lastY > h-EDGE) dy = Math.ceil((lastY-(h-EDGE))/EDGE*MAXSPEED);
+    if(dy!==0){ window.scrollBy(0,dy); placeLine(lastY); }
+  };
+
+  const onMove=(ev)=>{
+    didMove=true; lastY=ev.clientY;
+    placeLine(lastY);
+    if(!scrollTimer) scrollTimer=setInterval(autoScroll,16);
+  };
+  const onUp=()=>{
+    handle.removeEventListener('pointermove', onMove);
+    handle.removeEventListener('pointerup', onUp);
+    handle.removeEventListener('pointercancel', onUp);
+    if(scrollTimer){ clearInterval(scrollTimer); scrollTimer=null; }
+    line.remove();
+    card.classList.remove('dragging');
+    if(didMove) reorderPhoto(fromId, targetPid, atEnd);
+  };
+  handle.addEventListener('pointermove', onMove);
+  handle.addEventListener('pointerup', onUp);
+  handle.addEventListener('pointercancel', onUp);
+}
+function reorderPhoto(fromId, targetPid, atEnd){
+  const arr=state.photos;
+  const fromIdx=arr.findIndex(p=>p.id===fromId); if(fromIdx<0) return;
+  const [moved]=arr.splice(fromIdx,1);
+  if(atEnd || targetPid==null){ arr.push(moved); }
+  else{ const toIdx=arr.findIndex(p=>p.id===targetPid); arr.splice(toIdx<0?arr.length:toIdx,0,moved); }
+  markDirty(); renderPhotos();
+}
+
+/* ---------- プレビュー / 印刷描画 ---------- */
+function fmtDate(d){ return d ? d.replaceAll('-','.') : ''; }
+function buildLedgerHTML(){
+  const j=state.job;
+  const showDate = j.showDate!==false;
+  // 表紙の作業日（期間）
+  const dS=fmtDate(j.date), dE=fmtDate(j.dateEnd);
+  const dateRange = (dS&&dE) ? (dS===dE ? dS : `${dS} 〜 ${dE}`) : (dS||dE||'');
+  // --- 表紙（1ページ目） ---
+  let html=`<div class="pv-cover">
+      <div class="cover-box">
+        <div class="cover-h">写真台帳</div>
+        <table class="cover-tbl">
+          <tr><th>現場名</th><td>${esc(j.building)||'—'}</td></tr>
+          <tr><th>作業内容</th><td>${esc(j.overallWork)||'—'}</td></tr>
+          ${showDate?`<tr><th>作業日</th><td>${esc(dateRange)||'—'}</td></tr>`:''}
+        </table>
+      </div>
+    </div>`;
+  if(state.photos.length===0){
+    html+='<div class="empty-state">写真がありません。</div>';
+    return html;
+  }
+  // --- 写真ページ（2ページ目以降） ---
+  html+='<div class="pv-photos">';
+  state.photos.forEach((p,i)=>{
+    html+=`<div class="pv-block">
+      <div class="pv-photo${p.img?'':' blank'}">${p.img?`<img src="${p.img}">`:'（写真なし）'}</div>
+      <div class="pv-meta">
+        <span class="pv-no">No.${i+1}</span>
+        <table>
+          ${showDate?`<tr><th>作業日</th><td>${esc(fmtDate(p.date || j.date))}</td></tr>`:''}
+          <tr><th>撮影場所</th><td>${esc(p.room)}</td></tr>
+          <tr><th>系統名</th><td>${esc(p.system)}</td></tr>
+          <tr><th>機器型名</th><td>${esc(p.model)}</td></tr>
+          <tr><th>製造番号</th><td>${esc(p.serial)}</td></tr>
+          <tr><th>作業内容</th><td>${esc(p.work)}</td></tr>
+          <tr><th>内容</th><td>${esc(p.caption)}</td></tr>
+        </table>
+      </div>
+    </div>`;
+  });
+  html+='</div>';
+  return html;
+}
+function renderPreview(){ $('#previewSheet').innerHTML=buildLedgerHTML(); }
+
+function doPrint(){
+  $('#printArea').innerHTML=buildLedgerHTML();
+  window.print();
+}
+$('#btnPdf').addEventListener('click',doPrint);
+$('#btnPdf2').addEventListener('click',doPrint);
+
+/* ---------- JSON 書き出し / 読み込み（完全置換） ---------- */
+$('#btnExport').addEventListener('click',()=>{
+  // ファイル名：現場名＋日付（作業開始日。未入力なら書き出した日）
+  const site=(state.job.building||'写真台帳').replace(/[\\/:*?"<>|]/g,'_').trim();
+  let d=state.job.date;
+  if(!d){ const t=new Date();
+    d=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; }
+  const name=`${site}_${d.replaceAll('-','')}`;
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`${name}.json`; a.click(); URL.revokeObjectURL(a.href);
+});
+$('#btnImport').addEventListener('click',()=>$('#fileImport').click());
+$('#fileImport').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return; e.target.value='';
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const data=JSON.parse(rd.result);
+      if(!data||typeof data!=='object'||!('photos' in data)) throw new Error('形式が違います');
+      if(!confirm('読み込むと今のデータは完全に置き換わります。よろしいですか？')) return;
+      state={ job:{ building:(data.job&&data.job.building)||'', date:(data.job&&data.job.date)||'', dateEnd:(data.job&&data.job.dateEnd)||'',
+                    overallWork:(data.job&&data.job.overallWork)||'', showDate:!(data.job&&data.job.showDate===false) },
+              equipment:data.equipment||[], works:data.works||[],
+              photos:(data.photos||[]).map(normalizePhoto) };
+      bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderPreview(); markDirty();
+      alert('読み込みました。');
+    }catch(err){ alert('読み込めませんでした：'+err.message); }
+  };
+  rd.readAsText(f);
+});
+
+/* ---------- 保存先パスのコピー ---------- */
+$('#btnCopyPath').addEventListener('click',async()=>{
+  const path=$('#savePath').textContent.trim();
+  try{
+    await navigator.clipboard.writeText(path);
+    toast('保存先のパスをコピーしました');
+  }catch(_){
+    // クリップボードAPIが使えない環境（file://等）向けのフォールバック
+    const ta=document.createElement('textarea'); ta.value=path;
+    ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); toast('保存先のパスをコピーしました'); }
+    catch(e){ toast('コピーできませんでした。パスを手動で選択してください'); }
+    ta.remove();
+  }
+});
+
+/* ---------- 全データクリア（誤操作防止つき） ---------- */
+function dbClearAll(){
+  return new Promise((res)=>{
+    try{
+      const r=indexedDB.open(DB_NAME,1);
+      r.onsuccess=()=>{ const db=r.result; const tx=db.transaction(STORE,'readwrite');
+        tx.objectStore(STORE).delete(KEY); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false); };
+      r.onerror=()=>res(false);
+    }catch(e){ res(false); }
+  });
+}
+const clearModal=$('#clearModal');
+$('#btnClearAll').addEventListener('click',()=>{
+  $('#clearConfirmInput').value=''; $('#clearExec').disabled=true; clearModal.classList.add('on'); $('#clearConfirmInput').focus();
+});
+$('#clearCancel').addEventListener('click',()=>clearModal.classList.remove('on'));
+clearModal.addEventListener('click',(e)=>{ if(e.target===clearModal) clearModal.classList.remove('on'); }); // 外側タップで閉じる
+$('#clearConfirmInput').addEventListener('input',(e)=>{ $('#clearExec').disabled = e.target.value.trim()!=='クリア'; });
+$('#clearBackup').addEventListener('click',()=>$('#btnExport').click());
+$('#clearExec').addEventListener('click',async()=>{
+  if($('#clearConfirmInput').value.trim()!=='クリア') return; // 二重チェック
+  await dbClearAll();
+  state={ job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true}, equipment:[], works:[], photos:[] };
+  bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderPreview(); updateCounts();
+  clearModal.classList.remove('on');
+  toast('全データを削除しました');
+});
+
+/* ---------- カウンタ ---------- */
+function updateCounts(){
+  $('#cntMaster').textContent = state.equipment.length? `(${state.equipment.length})`:'';
+  $('#cntWorks').textContent = state.works.length? `(${state.works.length})`:'';
+  $('#cntPhotos').textContent = state.photos.length? `(${state.photos.length})`:'';
+}
+
+/* ---------- 起動 ---------- */
+(async function init(){
+  const saved=await dbLoad();
+  if(saved && typeof saved==='object'){
+    state={ job:{ building:(saved.job&&saved.job.building)||'', date:(saved.job&&saved.job.date)||'', dateEnd:(saved.job&&saved.job.dateEnd)||'',
+                  overallWork:(saved.job&&saved.job.overallWork)||'', showDate:!(saved.job&&saved.job.showDate===false) },
+            equipment:saved.equipment||[], works:saved.works||[],
+            photos:(saved.photos||[]).map(normalizePhoto) };
+    // 旧データ互換：現場の作業内容があれば、作業内容が空の写真に引き継ぐ
+    const legacyWork = saved.job && saved.job.work;
+    if(legacyWork){ state.photos.forEach(p=>{ if(!p.work){ p.work=legacyWork; p.workSrc='manual'; } }); }
+  }
+  bindJob(); renderMaster(); renderWorks(); renderPhotos(); updateCounts();
+})();
+</script>
+<script>
+/* PWA：サービスワーカー登録（オフライン動作・ホーム画面アプリ化のため） */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
+}
+</script>
+</body>
+</html>
