@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_35</title>
+<title>写真台帳ツール v1_36</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -279,7 +279,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_35</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_36</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -969,7 +969,7 @@ function renderPhotos(){
         bodyHTML+=`<div class="mini-field"><label>${esc(f.label)}</label>
           <input data-fid="${esc(f.id)}" class="eq-input${p.src==='master'?' from-master':''}" value="${esc(v)}"></div>`;
       }else{
-        if(equipDone){ bodyHTML+='</div>'; equipDone='closed'; }   // mini-grid を閉じる
+        if(equipDone===true){ bodyHTML+='</div>'; equipDone='closed'; }   // mini-grid を閉じる（閉じ済みなら何もしない）
         if(f.role==='work'){
           bodyHTML+=`<div class="pc-row" style="margin:12px 0 6px;">
             <select class="work-select" data-pid="${p.id}">${workOptionsHTML(p.workId||'__none__')}</select>
