@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_23</title>
+<title>写真台帳ツール v1_24</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -183,20 +183,30 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 /* ===== 印刷（PDF出力）専用 ===== */
 @media print{
   @page{size:A4 portrait; margin:12mm;}
-  body{background:#fff;}
+  body{background:#fff; font-size:10pt;}
   .appbar,.tabs,.no-print{display:none !important;}
   .wrap{max-width:none; margin:0; padding:0;}
   .panel{display:none !important;}
-  #printArea{display:block !important;}
+  #printArea{display:block !important; width:100%; max-width:none; margin:0; padding:0;}
   /* 表紙は1ページ独立 */
   .pv-cover{min-height:240mm; margin:0; break-after:page; page-break-after:always; border:1px solid #333;}
-  /* 写真は1ページ3枚を目安に */
-  .pv-block{break-inside:avoid; page-break-inside:avoid; min-height:82mm; margin-bottom:4mm; padding:6px;}
-  .pv-photo{min-height:52mm;}
-  .pv-photo img{max-height:64mm;}
-  .pv-meta th,.pv-meta td{padding:3px 6px; font-size:11px;}
-  .pv-meta th{width:74px;}
-  .pv-no{font-size:10px; margin-bottom:4px;}
+  /* 写真は1ページ3枚。スマホの画面幅に影響されないよう、印刷時は必ず横並び＆mm指定にする
+     （画面用の @media(max-width:...) による1列化を、ここで明示的に打ち消している） */
+  .pv-photos{width:100%;}
+  .pv-block{
+    display:grid !important;
+    grid-template-columns:1fr 58mm !important;  /* 写真 ／ データ の横並びを強制 */
+    gap:4mm !important;
+    break-inside:avoid; page-break-inside:avoid;
+    height:82mm; margin-bottom:4mm; padding:3mm;
+    box-sizing:border-box; overflow:hidden;
+  }
+  .pv-photo{min-height:0; height:100%; overflow:hidden;}
+  .pv-photo img{max-height:74mm; max-width:100%; object-fit:contain;}
+  .pv-meta{font-size:9pt;}
+  .pv-meta th,.pv-meta td{padding:1mm 1.5mm; font-size:8.5pt;}
+  .pv-meta th{width:18mm;}
+  .pv-no{font-size:8pt; margin-bottom:1mm; padding:1px 2mm;}
 }
 #printArea{display:none;}
 
@@ -232,7 +242,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_23</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_24</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
