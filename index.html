@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_32</title>
+<title>写真台帳ツール v1_33</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -268,7 +268,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_32</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_33</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -657,6 +657,36 @@ function eqLabel(e){
   const parts=fs.map(f=> equipValue(e,f.id) || `(${f.label}なし)`);
   return parts.length? parts.join(' / ') : '(未登録)';
 }
+/* 「マスタ」バッジの写真を、選択中のマスタの値で常に一致させる。
+   （表示のたびに実行するので、後からマスタを直しても、過去データでも必ず揃う）
+   手直し済み（'edited'）の写真は対象外＝個別の上書きは守られる */
+function syncAllFromMasters(){
+  let changed=false;
+  const efs=equipFields(), wf=workField();
+  state.photos.forEach(p=>{
+    if(p.src==='master' && p.equipId){
+      const e=state.equipment.find(x=>x.id===p.equipId);
+      if(e){
+        efs.forEach(f=>{
+          const v=equipValue(e,f.id);
+          if(((p.values&&p.values[f.id])||'')!==v){ setPhotoValue(p,f.id,v); changed=true; }
+        });
+      }else{
+        p.equipId=''; p.src=''; changed=true;   // マスタが消えていたらリンクを外す
+      }
+    }
+    if(wf && p.workSrc==='master' && p.workId){
+      const w=state.works.find(x=>x.id===p.workId);
+      if(w){
+        if(((p.values&&p.values[wf.id])||'')!==w.name){ setPhotoValue(p,wf.id,w.name); changed=true; }
+      }else{
+        p.workId=''; p.workSrc=''; changed=true;
+      }
+    }
+  });
+  return changed;
+}
+
 /* マスタの内容を、そのマスタを選んでいる写真へ反映する。
    ただし手直し済み（src==='edited'）の写真は上書きしない＝個別の上書きを壊さない */
 function syncPhotosFromEquip(e){
@@ -838,6 +868,7 @@ function refreshWorkSelects(){
 
 /* ---------- 写真：一覧描画 ---------- */
 function renderPhotos(){
+  if(syncAllFromMasters()) markDirty();   // 描画前にマスタと突き合わせて揃える
   const list=$('#photoList'); list.innerHTML='';
   $('#photoEmpty').style.display=state.photos.length? 'none':'block';
   const fields=getFields().filter(f=>f.show!==false);
@@ -1071,6 +1102,7 @@ function reorderPhoto(fromId, targetPid, atEnd){
 /* ---------- プレビュー / 印刷描画 ---------- */
 function fmtDate(d){ return d ? d.replaceAll('-','.') : ''; }
 function buildLedgerHTML(){
+  syncAllFromMasters();
   const j=state.job;
   const showDate = j.showDate!==false;
   // 表紙の作業日（期間）
