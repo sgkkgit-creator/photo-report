@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_34</title>
+<title>写真台帳ツール v1_35</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -149,6 +149,17 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 .photo-card.dragging{opacity:.55; box-shadow:0 10px 26px rgba(20,30,40,.18);}
 .drop-line{height:4px; background:var(--accent); border-radius:2px; margin:5px 2px; pointer-events:none;}
 
+/* ---------- 空のコマ / 写真操作 ---------- */
+.photo-thumb.empty{background:#F5F8F9; border:2px dashed var(--line); color:var(--muted);
+  flex-direction:column; gap:6px; font-size:12.5px; text-align:center; padding:10px;}
+.photo-thumb.empty .em-icon{font-size:24px; opacity:.5;}
+.thumb-wrap{display:flex; flex-direction:column; gap:6px;}
+.thumb-actions{display:flex; gap:6px;}
+.thumb-actions .tool-btn{padding:4px 8px; font-size:11.5px; flex:1;}
+.blank-count{font-size:12.5px; color:var(--chip); background:var(--chip-tint); border:1px solid #EBD9A8;
+  border-radius:8px; padding:8px 12px; margin-bottom:14px; display:none;}
+.blank-count.on{display:block;}
+
 /* ---------- 保存先パスの表示（ツールバー直下） ---------- */
 .path-bar{max-width:1080px; margin:0 auto; padding:0 16px 10px;
   display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
@@ -268,7 +279,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_34</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_35</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -310,6 +321,9 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
       <div class="field" style="margin-bottom:0;">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600;">
           <input type="checkbox" id="job-showdate" style="width:auto;"> <span id="lbl-showdate">作業日を出力（表紙・各写真）に表示する</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; margin-top:8px;">
+          <input type="checkbox" id="job-showcover" style="width:auto;"> 表紙（1ページ目）を付ける
         </label>
       </div>
     </div>
@@ -385,7 +399,13 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
       <div class="big"><button class="tool-btn primary" id="btnPick" style="font-size:14px;">写真を選ぶ</button></div>
       <div style="margin-top:6px;">スマホ・タブレットは上のボタンから（複数可）。PCはこの枠へドラッグ&ドロップでもOK。</div>
       <input type="file" id="filePhotos" accept="image/*" multiple hidden>
+      <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line);">
+        <button class="tool-btn" id="btnAddBlank">＋ 空のコマを追加</button>
+        <span class="hint" style="margin:0 0 0 10px;">写真は後から入れられます（内容を先に作りたいとき）</span>
+      </div>
+      <input type="file" id="fileReplace" accept="image/*" hidden>
     </div>
+    <div class="blank-count" id="blankCount"></div>
     <div id="photoList"></div>
     <div class="empty-state" id="photoEmpty">まだ写真がありません。上のエリアから追加してください。</div>
   </section>
@@ -442,7 +462,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
    }
    src / workSrc: '' | 'master'(転記) | 'edited'(転記後に手直し) | 'manual'(手入力)
    ========================================================= */
-let state = { job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true},
+let state = { job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true,showCover:true},
               equipment:[], works:[], photos:[], fields:null, coverFields:null };
 
 /* =========================================================
@@ -637,7 +657,10 @@ function bindJob(){
   });
   const chk=$('#job-showdate');
   chk.checked = state.job.showDate!==false;
-  chk.onchange=()=>{ state.job.showDate=chk.checked; markDirty(); renderPreview(); };
+  chk.onchange=()=>{ state.job.showDate=chk.checked; markDirty(); renderPhotos(); renderPreview(); };
+  const cvk=$('#job-showcover');
+  cvk.checked = state.job.showCover!==false;
+  cvk.onchange=()=>{ state.job.showCover=cvk.checked; markDirty(); renderPreview(); };
   refreshJobLabels();
 }
 /* 現場情報の見出しも「出力項目」タブの設定に合わせる（呼び名の一元管理） */
@@ -814,13 +837,7 @@ async function addPhotoFiles(files){
       // 直前の写真から「マスタ項目＋作業内容」を引き継ぐ（写真ごとの項目・日付は引き継がない）
       const prev=state.photos[state.photos.length-1];
       const np=normalizePhoto({id:uid(), img:data, values:{}});
-      if(prev){
-        np.equipId=prev.equipId; np.src=prev.src;
-        np.workId=prev.workId;   np.workSrc=prev.workSrc;
-        equipFields().forEach(f=>{ np.values[f.id]=(prev.values&&prev.values[f.id])||''; });
-        const wf=workField();
-        if(wf) np.values[wf.id]=(prev.values&&prev.values[wf.id])||'';
-      }
+      copyFromPrev(np, prev);   // 直前のコマから内容を引き継ぐ
       state.photos.push(np);
       ok++;
     }
@@ -831,6 +848,51 @@ async function addPhotoFiles(files){
   markDirty(); renderPhotos();
   toast(ng>0 ? `${ok}枚追加しました（${ng}枚は読み込めませんでした）` : `${ok}枚追加しました`);
 }
+/* 前のコマから内容を引き継ぐ（写真そのものと「写真ごとに入力」の項目は除く） */
+function copyFromPrev(p, prev){
+  if(!prev) return;
+  p.equipId=prev.equipId; p.src=prev.src;
+  p.workId=prev.workId;   p.workSrc=prev.workSrc;
+  getFields().forEach(f=>{
+    if(f.role==='photo') return;                    // 写真内容はコピーしない
+    setPhotoValue(p, f.id, (prev.values&&prev.values[f.id])||'');
+  });
+}
+
+/* 空のコマを追加（写真は後から入れる運用向け） */
+$('#btnAddBlank').addEventListener('click',()=>{
+  const ans=prompt('いくつ追加しますか？','1');
+  if(ans===null) return;
+  let n=parseInt(ans,10);
+  if(!isFinite(n)||n<1){ toast('1以上の数を入力してください'); return; }
+  if(n>200) n=200;
+  for(let i=0;i<n;i++){
+    const prev=state.photos[state.photos.length-1];
+    const np=normalizePhoto({id:uid(), img:'', values:{}});
+    copyFromPrev(np, prev);                          // 上のコマの内容を引き継ぐ
+    state.photos.push(np);
+  }
+  markDirty(); renderPhotos();
+  toast(`空のコマを${n}個追加しました`);
+});
+
+/* 写真の差し替え／後から追加 */
+let replaceTargetId=null;
+$('#fileReplace').addEventListener('change', async (e)=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(!f || !replaceTargetId) return;
+  const p=state.photos.find(x=>x.id===replaceTargetId);
+  if(!p){ replaceTargetId=null; return; }
+  showBusy('写真を処理中…');
+  let data=null;
+  try{ data=await downscale(f); }catch(_){ data=null; }
+  if(!data) data=await readAsDataURL(f);
+  hideBusy();
+  if(data){ p.img=data; markDirty(); renderPhotos(); toast('写真を設定しました'); }
+  else{ toast('この写真は読み込めませんでした'); }
+  replaceTargetId=null;
+});
+
 $('#btnPick').addEventListener('click',()=>$('#filePhotos').click());
 $('#filePhotos').addEventListener('change',e=>{ addPhotoFiles(e.target.files); e.target.value=''; });
 const dz=$('#dropzone');
@@ -867,6 +929,12 @@ function refreshWorkSelects(){
 }
 
 /* ---------- 写真：一覧描画 ---------- */
+function updateBlankCount(){
+  const n=state.photos.filter(p=>!p.img).length;
+  const el=$('#blankCount');
+  el.classList.toggle('on', n>0);
+  if(n>0) el.textContent=`写真が入っていないコマ：${n}件`;
+}
 function renderPhotos(){
   if(syncAllFromMasters()) markDirty();   // 描画前にマスタと突き合わせて揃える
   const list=$('#photoList'); list.innerHTML='';
@@ -918,17 +986,28 @@ function renderPhotos(){
     });
     if(equipDone===true) bodyHTML+='</div>';   // 機器欄で終わっていたら閉じる
 
+    const thumb = p.img
+      ? `<div class="photo-thumb"><span class="photo-no">No.${idx+1}</span><img src="${p.img}" alt=""></div>`
+      : `<div class="photo-thumb empty"><span class="photo-no">No.${idx+1}</span>
+           <span class="em-icon">🖼</span><span>写真を追加</span></div>`;
     card.innerHTML=`
-      <div class="photo-thumb"><span class="photo-no">No.${idx+1}</span><img src="${p.img}" alt=""></div>
+      <div class="thumb-wrap">
+        ${thumb}
+        <div class="thumb-actions">
+          <button class="tool-btn btn-setphoto">${p.img?'差し替え':'写真を追加'}</button>
+          ${p.img?'<button class="tool-btn btn-delphoto">写真を削除</button>':''}
+        </div>
+      </div>
       <div class="photo-body">
         ${bodyHTML}
         <div class="pc-foot">
           <span class="drag-handle" title="ドラッグで並べ替え" aria-label="ドラッグで並べ替え">⠿</span>
           <button class="order-btn up" title="上へ" ${idx===0?'disabled':''}>▲</button>
           <button class="order-btn down" title="下へ" ${idx===state.photos.length-1?'disabled':''}>▼</button>
+          ${idx>0?'<button class="link-btn copy-above" title="上のコマの内容を引き継ぐ">↑ 上からコピー</button>':''}
           <span class="grow"></span>
           <button class="link-btn add-master" style="display:none;">＋ この内容をマスタに追加</button>
-          <button class="icon-btn del" title="この写真を削除">🗑</button>
+          <button class="icon-btn del" title="このコマを削除">🗑</button>
         </div>
       </div>`;
 
@@ -995,7 +1074,27 @@ function renderPhotos(){
     const handle=card.querySelector('.drag-handle');
     handle.addEventListener('pointerdown',(e)=>startDrag(e, card, handle));
     card.querySelector('.del').addEventListener('click',()=>{
-      if(confirm('この写真を削除しますか？')){ state.photos.splice(idx,1); markDirty(); renderPhotos(); }
+      if(confirm('このコマを削除しますか？')){ state.photos.splice(idx,1); markDirty(); renderPhotos(); }
+    });
+    // 写真の差し替え／追加
+    card.querySelector('.btn-setphoto').addEventListener('click',()=>{
+      replaceTargetId = p.id;
+      $('#fileReplace').click();
+    });
+    // 写真だけ削除（コマは残す＝空コマに戻す）
+    const dp=card.querySelector('.btn-delphoto');
+    if(dp) dp.addEventListener('click',()=>{
+      if(confirm('写真を削除して空のコマに戻しますか？\n入力した内容は残ります。')){
+        p.img=''; markDirty(); renderPhotos();
+      }
+    });
+    // 上のコマから内容をコピー（写真内容は除く）
+    const ca=card.querySelector('.copy-above');
+    if(ca) ca.addEventListener('click',()=>{
+      const prev=state.photos[idx-1]; if(!prev) return;
+      copyFromPrev(p, prev);
+      markDirty(); renderPhotos();
+      toast('上のコマから内容をコピーしました');
     });
     const am=card.querySelector('.add-master');
     am.addEventListener('click',()=>{
@@ -1008,6 +1107,7 @@ function renderPhotos(){
 
     list.appendChild(card);
   });
+  updateBlankCount();
   updateCounts();
 }
 function updateBadge(card,p){
@@ -1118,7 +1218,8 @@ function buildLedgerHTML(){
                        : key==='overallWork' ? j.overallWork
                        : dateRange;
   const coverRows = cover.map(c=>`<tr><th>${esc(c.label)}</th><td>${esc(coverVal(c.key))||'—'}</td></tr>`).join('');
-  let html=`<div class="pv-cover">
+  // 表紙を付けない設定なら省略し、1ページ目から写真を並べる
+  let html = (j.showCover===false) ? '' : `<div class="pv-cover">
       <div class="cover-box">
         <div class="cover-h">写真台帳</div>
         <table class="cover-tbl">${coverRows}</table>
@@ -1180,7 +1281,8 @@ $('#fileImport').addEventListener('change',e=>{
       if(!data||typeof data!=='object'||!('photos' in data)) throw new Error('形式が違います');
       if(!confirm('読み込むと今のデータは完全に置き換わります。よろしいですか？')) return;
       state={ job:{ building:(data.job&&data.job.building)||'', date:(data.job&&data.job.date)||'', dateEnd:(data.job&&data.job.dateEnd)||'',
-                    overallWork:(data.job&&data.job.overallWork)||'', showDate:!(data.job&&data.job.showDate===false) },
+                    overallWork:(data.job&&data.job.overallWork)||'', showDate:!(data.job&&data.job.showDate===false),
+                    showCover:!(data.job&&data.job.showCover===false) },
               equipment:(data.equipment||[]).map(normalizeEquip), works:data.works||[],
               photos:(data.photos||[]).map(normalizePhoto),
               fields:normalizeFields(data.fields), coverFields:normalizeCover(data.coverFields) };
@@ -1440,7 +1542,7 @@ $('#clearBackup').addEventListener('click',()=>$('#btnExport').click());
 $('#clearExec').addEventListener('click',async()=>{
   if($('#clearConfirmInput').value.trim()!=='クリア') return; // 二重チェック
   await dbClearAll();
-  state={ job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true}, equipment:[], works:[], photos:[],
+  state={ job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true,showCover:true}, equipment:[], works:[], photos:[],
           fields:DEFAULT_FIELDS.map(d=>({...d})), coverFields:DEFAULT_COVER.map(d=>({...d})) };
   bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderFields(); renderPreview(); updateCounts();
   clearModal.classList.remove('on');
@@ -1459,7 +1561,8 @@ function updateCounts(){
   const saved=await dbLoad();
   if(saved && typeof saved==='object'){
     state={ job:{ building:(saved.job&&saved.job.building)||'', date:(saved.job&&saved.job.date)||'', dateEnd:(saved.job&&saved.job.dateEnd)||'',
-                  overallWork:(saved.job&&saved.job.overallWork)||'', showDate:!(saved.job&&saved.job.showDate===false) },
+                  overallWork:(saved.job&&saved.job.overallWork)||'', showDate:!(saved.job&&saved.job.showDate===false),
+                  showCover:!(saved.job&&saved.job.showCover===false) },
             equipment:(saved.equipment||[]).map(normalizeEquip), works:saved.works||[],
             photos:(saved.photos||[]).map(normalizePhoto),
             fields:normalizeFields(saved.fields), coverFields:normalizeCover(saved.coverFields) };
