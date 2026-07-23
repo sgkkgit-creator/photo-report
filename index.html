@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_28</title>
+<title>写真台帳ツール v1_29</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -265,7 +265,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_28</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_29</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -297,16 +297,16 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
       <h2 class="sec-title">現場情報</h2>
       <p class="hint">現場ごとに最初に一度だけ入力します。ここは表紙（PDF1ページ目）に表示されます。作業日（開始）は各写真の既定値になり、写真ごとに変えられます。表紙には期間（開始〜終了）で表示されます。</p>
       <div class="grid-2">
-        <div class="field"><label>現場名（建物名称）</label><input type="text" id="job-building" placeholder="例：総合化工株式会社"></div>
-        <div class="field"><label>全体作業内容（表紙用）</label><input type="text" id="job-overall" placeholder="例：空調機整備作業"></div>
+        <div class="field"><label id="lbl-building">現場名</label><input type="text" id="job-building" placeholder="例：総合化工株式会社"></div>
+        <div class="field"><label id="lbl-overall">全体作業内容</label><input type="text" id="job-overall" placeholder="例：空調機整備作業"></div>
       </div>
       <div class="grid-2">
-        <div class="field"><label>作業日（開始）</label><input type="date" id="job-date"></div>
-        <div class="field"><label>作業日（終了）</label><input type="date" id="job-date-end"></div>
+        <div class="field"><label id="lbl-date-s">作業日（開始）</label><input type="date" id="job-date"></div>
+        <div class="field"><label id="lbl-date-e">作業日（終了）</label><input type="date" id="job-date-end"></div>
       </div>
       <div class="field" style="margin-bottom:0;">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600;">
-          <input type="checkbox" id="job-showdate" style="width:auto;"> 作業日を出力（表紙・各写真）に表示する
+          <input type="checkbox" id="job-showdate" style="width:auto;"> <span id="lbl-showdate">作業日を出力（表紙・各写真）に表示する</span>
         </label>
       </div>
     </div>
@@ -326,7 +326,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
       <h2 class="sec-title">機器マスタ</h2>
       <p class="hint">現場にある機器を一度だけ登録します。写真ではここから「選ぶだけ」で系統名・型名・製番・部屋が自動で入ります。</p>
       <table class="eq-table">
-        <thead><tr><th>系統名</th><th>機器型名</th><th>製造番号</th><th>撮影場所(部屋)</th><th class="act"></th></tr></thead>
+        <thead id="eqHead"></thead>
         <tbody id="eqBody"></tbody>
       </table>
       <div style="margin-top:12px;"><button class="tool-btn" id="btnAddEq">＋ 機器を追加</button></div>
@@ -340,7 +340,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
       <h2 class="sec-title">作業マスタ</h2>
       <p class="hint">よく使う作業名を登録します。写真ではここから「選ぶだけ」で作業内容が入ります（例：圧縮機交換／温度センサ交換／フィルター清掃）。</p>
       <table class="eq-table">
-        <thead><tr><th>作業内容</th><th class="act"></th></tr></thead>
+        <thead id="workHead"></thead>
         <tbody id="workBody"></tbody>
       </table>
       <div style="margin-top:12px;"><button class="tool-btn" id="btnAddWork">＋ 作業を追加</button></div>
@@ -352,8 +352,8 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
     <div class="card">
       <div class="section-eyebrow">出力設定</div>
       <h2 class="sec-title">出力項目（写真の右側）</h2>
-      <p class="hint">PDFで写真の右に出す項目を、顧客ごとに変えられます。チェックを外すと出力されません（入力したデータは消えず、戻せば再び出ます）。見出しの文字は自由に変更でき、⠿ をドラッグすると並び順が変わります。<br>
-        この設定は写真台帳データに含まれるので、書き出して別のPCで読み込んでも同じ体裁になります。</p>
+      <p class="hint">PDFに出す項目を顧客ごとに変えられます。チェックを外すと出力されません（入力したデータは消えず、戻せば再び出ます）。見出しの文字は自由に変更でき、⠿ をドラッグすると並び順が変わります。<br>
+        <b>ここで決めた呼び名は、現場情報・機器マスタ・作業マスタ・写真の入力欄にもすべて反映されます</b>（呼び名は常に一致します）。この設定は写真台帳データに含まれるので、書き出して別のPCで読み込んでも同じ体裁になります。</p>
       <div class="tpl-bar">
         <span class="tpl-label">テンプレート</span>
         <select id="tplSelect"><option value="">（選択してください）</option></select>
@@ -362,8 +362,13 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
         <button class="tool-btn" id="btnTplDelete">削除</button>
       </div>
       <p class="hint" style="margin:8px 0 16px;">よく使う体裁に名前を付けて保存できます（例：A社仕様、簡易版）。テンプレートは<b>この端末に保存</b>され、現場データを読み込んでも消えません。</p>
+      <h3 style="font-size:13px; margin:18px 0 8px; color:var(--muted); letter-spacing:.04em;">表紙（1ページ目）</h3>
+      <div id="coverList"></div>
+
+      <h3 style="font-size:13px; margin:22px 0 8px; color:var(--muted); letter-spacing:.04em;">各写真の右側</h3>
       <div id="fieldList"></div>
-      <div style="margin-top:14px;"><button class="tool-btn" id="btnResetFields">既定に戻す</button></div>
+
+      <div style="margin-top:18px;"><button class="tool-btn" id="btnResetFields">すべて既定に戻す</button></div>
     </div>
   </section>
 
@@ -430,7 +435,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
    }
    src / workSrc: '' | 'master'(転記) | 'edited'(転記後に手直し) | 'manual'(手入力)
    ========================================================= */
-let state = { job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true}, equipment:[], works:[], photos:[], fields:null };
+let state = { job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true}, equipment:[], works:[], photos:[], fields:null, coverFields:null };
 
 /* 出力項目（写真の右側に出る欄）の既定設定
    key   … データのどの値を出すか（変更不可の内部名）
@@ -446,6 +451,30 @@ const DEFAULT_FIELDS = [
   {key:'work',    label:'作業内容', show:true},
   {key:'caption', label:'内容',     show:true},
 ];
+/* 表紙（1ページ目）に出す項目。ラベルと表示/非表示を変更できる */
+const DEFAULT_COVER = [
+  {key:'building',    label:'現場名',   show:true},
+  {key:'overallWork', label:'作業内容', show:true},
+  {key:'coverDate',   label:'作業日',   show:true},
+];
+function normalizeCover(f){
+  const src=Array.isArray(f)?f:[]; const out=[];
+  src.forEach(x=>{ const d=DEFAULT_COVER.find(d=>d.key===x.key);
+    if(d && !out.some(o=>o.key===x.key)) out.push({key:d.key,label:(x.label??d.label),show:x.show!==false}); });
+  DEFAULT_COVER.forEach(d=>{ if(!out.some(o=>o.key===d.key)) out.push({...d}); });
+  return out;
+}
+/* 出力項目のラベルを取得（画面のあちこちで同じ呼び名を使うための唯一の入口） */
+function labelOf(key){
+  const f=normalizeFields(state.fields).find(x=>x.key===key);
+  if(f) return f.label;
+  const c=normalizeCover(state.coverFields).find(x=>x.key===key);
+  return c ? c.label : key;
+}
+function isShown(key){
+  const f=normalizeFields(state.fields).find(x=>x.key===key);
+  return f ? f.show!==false : true;
+}
 function normalizeFields(f){
   const src = Array.isArray(f) ? f : [];
   const out = [];
@@ -562,27 +591,39 @@ function bindJob(){
   });
   const chk=$('#job-showdate');
   chk.checked = state.job.showDate!==false;
-  chk.onchange=()=>{ state.job.showDate=chk.checked; markDirty(); };
+  chk.onchange=()=>{ state.job.showDate=chk.checked; markDirty(); renderPreview(); };
+  refreshJobLabels();
+}
+/* 現場情報の見出しも「出力項目」タブの設定に合わせる（呼び名の一元管理） */
+function refreshJobLabels(){
+  const cv=(k)=>{ const c=normalizeCover(state.coverFields).find(x=>x.key===k); return c?c.label:k; };
+  $('#lbl-building').textContent = cv('building');
+  $('#lbl-overall').textContent  = cv('overallWork') + '（表紙用）';
+  $('#lbl-date-s').textContent   = cv('coverDate') + '（開始）';
+  $('#lbl-date-e').textContent   = cv('coverDate') + '（終了）';
+  $('#lbl-showdate').textContent = cv('coverDate') + 'を出力（表紙・各写真）に表示する';
 }
 
 /* ---------- 機器マスタ ---------- */
 function eqLabel(e){
-  const parts=[e.system||'(系統なし)', e.model||'(型名なし)', e.serial||'(製番なし)', e.room||'(場所なし)'];
-  return parts.join(' / ');
+  // 表示する項目・順序は「出力項目」タブの設定に合わせる
+  const keys=['system','model','serial','room'].filter(isShown);
+  const parts=keys.map(k=> e[k] || `(${labelOf(k)}なし)`);
+  return parts.length? parts.join(' / ') : '(機器)';
 }
 function renderMaster(){
+  // 列の見出し・使う列は「出力項目」タブの設定に従う（呼び名を一元管理するため）
+  const cols=['system','model','serial','room'].filter(isShown);
+  $('#eqHead').innerHTML='<tr>'+cols.map(k=>`<th>${esc(labelOf(k))}</th>`).join('')+'<th class="act"></th></tr>';
   const body=$('#eqBody'); body.innerHTML='';
   if(state.equipment.length===0){
-    body.innerHTML='<tr><td colspan="5" class="eq-empty">機器がまだありません。「＋ 機器を追加」から登録してください。</td></tr>';
+    body.innerHTML=`<tr><td colspan="${cols.length+1}" class="eq-empty">機器がまだありません。「＋ 機器を追加」から登録してください。</td></tr>`;
   }
   state.equipment.forEach((e)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`
-      <td><input data-k="system" placeholder="系統名"></td>
-      <td><input data-k="model" placeholder="機器型名"></td>
-      <td><input data-k="serial" placeholder="製造番号"></td>
-      <td><input data-k="room" placeholder="部屋"></td>
-      <td class="act"><button class="icon-btn del" title="削除">✕</button></td>`;
+    tr.innerHTML=
+      cols.map(k=>`<td><input data-k="${k}" placeholder="${esc(labelOf(k))}"></td>`).join('')+
+      '<td class="act"><button class="icon-btn del" title="削除">✕</button></td>';
     tr.querySelectorAll('input').forEach(inp=>{
       inp.value=e[inp.dataset.k]||'';
       inp.addEventListener('input',()=>{ e[inp.dataset.k]=inp.value; markDirty(); refreshPhotoSelects(); });
@@ -602,6 +643,7 @@ $('#btnAddEq').addEventListener('click',()=>{
 
 /* ---------- 作業マスタ ---------- */
 function renderWorks(){
+  $('#workHead').innerHTML=`<tr><th>${esc(labelOf('work'))}</th><th class="act"></th></tr>`;
   const body=$('#workBody'); body.innerHTML='';
   if(state.works.length===0){
     body.innerHTML='<tr><td colspan="2" class="eq-empty">作業がまだありません。「＋ 作業を追加」から登録してください。</td></tr>';
@@ -936,15 +978,20 @@ function buildLedgerHTML(){
   // 表紙の作業日（期間）
   const dS=fmtDate(j.date), dE=fmtDate(j.dateEnd);
   const dateRange = (dS&&dE) ? (dS===dE ? dS : `${dS} 〜 ${dE}`) : (dS||dE||'');
-  // --- 表紙（1ページ目） ---
+  // --- 表紙（1ページ目）：ラベル・表示は「出力項目」タブの設定に従う ---
+  const cover = normalizeCover(state.coverFields).filter(c=>{
+    if(!c.show) return false;
+    if(c.key==='coverDate' && !showDate) return false;
+    return true;
+  });
+  const coverVal=(key)=> key==='building' ? j.building
+                       : key==='overallWork' ? j.overallWork
+                       : dateRange;
+  const coverRows = cover.map(c=>`<tr><th>${esc(c.label)}</th><td>${esc(coverVal(c.key))||'—'}</td></tr>`).join('');
   let html=`<div class="pv-cover">
       <div class="cover-box">
         <div class="cover-h">写真台帳</div>
-        <table class="cover-tbl">
-          <tr><th>現場名</th><td>${esc(j.building)||'—'}</td></tr>
-          <tr><th>作業内容</th><td>${esc(j.overallWork)||'—'}</td></tr>
-          ${showDate?`<tr><th>作業日</th><td>${esc(dateRange)||'—'}</td></tr>`:''}
-        </table>
+        <table class="cover-tbl">${coverRows}</table>
       </div>
     </div>`;
   if(state.photos.length===0){
@@ -1006,7 +1053,7 @@ $('#fileImport').addEventListener('change',e=>{
                     overallWork:(data.job&&data.job.overallWork)||'', showDate:!(data.job&&data.job.showDate===false) },
               equipment:data.equipment||[], works:data.works||[],
               photos:(data.photos||[]).map(normalizePhoto),
-              fields:normalizeFields(data.fields) };
+              fields:normalizeFields(data.fields), coverFields:normalizeCover(data.coverFields) };
       bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderFields(); renderPreview(); markDirty();
       alert('読み込みました。');
     }catch(err){ alert('読み込めませんでした：'+err.message); }
@@ -1015,7 +1062,71 @@ $('#fileImport').addEventListener('change',e=>{
 });
 
 /* ---------- 出力項目の設定 ---------- */
+/* 変更を画面全体へ反映する（呼び名の一元管理の要） */
+function applyFieldChange(){
+  markDirty(); refreshJobLabels(); renderMaster(); renderWorks(); renderPhotos(); renderPreview();
+}
+function renderCoverFields(){
+  state.coverFields = normalizeCover(state.coverFields);
+  const list=$('#coverList'); list.innerHTML='';
+  state.coverFields.forEach((f)=>{
+    const row=document.createElement('div');
+    row.className='field-row'+(f.show?'':' off');
+    row.dataset.key=f.key;
+    const defLabel=(DEFAULT_COVER.find(d=>d.key===f.key)||{}).label||f.key;
+    row.innerHTML=`
+      <span class="drag-handle" title="ドラッグで並べ替え">⠿</span>
+      <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+        <input type="checkbox" ${f.show?'checked':''}> <span style="font-size:12.5px; font-weight:600;">出力</span>
+      </label>
+      <span class="fname">${esc(defLabel)}</span>
+      <input type="text" value="${esc(f.label)}" placeholder="表紙に出す見出し">`;
+    row.querySelector('input[type=checkbox]').addEventListener('change',(e)=>{
+      f.show=e.target.checked; row.classList.toggle('off',!f.show); applyFieldChange();
+    });
+    row.querySelector('input[type=text]').addEventListener('input',(e)=>{
+      f.label=e.target.value; applyFieldChange();
+    });
+    const h=row.querySelector('.drag-handle');
+    h.addEventListener('pointerdown',(e)=>startCoverDrag(e,row,h));
+    list.appendChild(row);
+  });
+}
+function startCoverDrag(e,row,handle){
+  if(e.pointerType==='mouse' && e.button!==0) return;
+  e.preventDefault();
+  const list=$('#coverList'); const fromKey=row.dataset.key;
+  row.classList.add('dragging');
+  try{ handle.setPointerCapture(e.pointerId); }catch(_){}
+  const line=document.createElement('div'); line.className='drop-line';
+  let targetKey=null, atEnd=false, moved=false;
+  const place=(y)=>{
+    const rows=[...list.querySelectorAll('.field-row')].filter(r=>r!==row);
+    for(const r of rows){ const b=r.getBoundingClientRect();
+      if(y<b.top+b.height/2){ list.insertBefore(line,r); targetKey=r.dataset.key; atEnd=false; return; } }
+    list.appendChild(line); targetKey=null; atEnd=true;
+  };
+  const onMove=(ev)=>{ moved=true; place(ev.clientY); };
+  const onUp=()=>{
+    handle.removeEventListener('pointermove',onMove);
+    handle.removeEventListener('pointerup',onUp);
+    handle.removeEventListener('pointercancel',onUp);
+    line.remove(); row.classList.remove('dragging');
+    if(moved){
+      const arr=state.coverFields;
+      const fi=arr.findIndex(x=>x.key===fromKey); if(fi<0) return;
+      const [mv]=arr.splice(fi,1);
+      if(atEnd||targetKey==null) arr.push(mv);
+      else{ const ti=arr.findIndex(x=>x.key===targetKey); arr.splice(ti<0?arr.length:ti,0,mv); }
+      renderCoverFields(); applyFieldChange();
+    }
+  };
+  handle.addEventListener('pointermove',onMove);
+  handle.addEventListener('pointerup',onUp);
+  handle.addEventListener('pointercancel',onUp);
+}
 function renderFields(){
+  renderCoverFields();
   state.fields = normalizeFields(state.fields);
   const list=$('#fieldList'); list.innerHTML='';
   state.fields.forEach((f)=>{
@@ -1031,11 +1142,11 @@ function renderFields(){
       <input type="text" value="${esc(f.label)}" placeholder="PDFに出す見出し">`;
     // 表示/非表示
     row.querySelector('input[type=checkbox]').addEventListener('change',(e)=>{
-      f.show=e.target.checked; row.classList.toggle('off',!f.show); markDirty(); renderPhotos(); renderPreview();
+      f.show=e.target.checked; row.classList.toggle('off',!f.show); applyFieldChange();
     });
     // ラベル名
     row.querySelector('input[type=text]').addEventListener('input',(e)=>{
-      f.label=e.target.value; markDirty(); renderPhotos(); renderPreview();
+      f.label=e.target.value; applyFieldChange();
     });
     // ドラッグ並べ替え
     const h=row.querySelector('.drag-handle');
@@ -1075,7 +1186,7 @@ function startFieldDrag(e,row,handle){
       const [mv]=arr.splice(fi,1);
       if(atEnd||targetKey==null) arr.push(mv);
       else{ const ti=arr.findIndex(x=>x.key===targetKey); arr.splice(ti<0?arr.length:ti,0,mv); }
-      markDirty(); renderFields(); renderPhotos(); renderPreview();
+      renderFields(); applyFieldChange();
     }
   };
   handle.addEventListener('pointermove',onMove);
@@ -1085,7 +1196,8 @@ function startFieldDrag(e,row,handle){
 $('#btnResetFields').addEventListener('click',()=>{
   if(!confirm('出力項目の設定を既定に戻しますか？')) return;
   state.fields=DEFAULT_FIELDS.map(d=>({...d}));
-  markDirty(); renderFields(); renderPhotos(); renderPreview(); toast('出力項目を既定に戻しました');
+  state.coverFields=DEFAULT_COVER.map(d=>({...d}));
+  renderFields(); applyFieldChange(); toast('出力項目を既定に戻しました');
 });
 
 /* ---------- 出力項目テンプレート（この端末に保存） ---------- */
@@ -1107,12 +1219,13 @@ $('#btnTplSave').addEventListener('click',async()=>{
   const name=(prompt('テンプレート名を入力してください（同じ名前なら上書きします）', cur||'')||'').trim();
   if(!name) return;
   const fields=normalizeFields(state.fields).map(f=>({key:f.key,label:f.label,show:f.show}));
+  const coverFields=normalizeCover(state.coverFields).map(f=>({key:f.key,label:f.label,show:f.show}));
   const i=fieldTemplates.findIndex(t=>t.name===name);
   if(i>=0){
     if(!confirm(`「${name}」を上書きしますか？`)) return;
-    fieldTemplates[i]={name,fields};
+    fieldTemplates[i]={name,fields,coverFields};
   }else{
-    fieldTemplates.push({name,fields});
+    fieldTemplates.push({name,fields,coverFields});
   }
   await saveTemplates(); renderTemplateSelect(); $('#tplSelect').value=name;
   toast(`テンプレート「${name}」を保存しました`);
@@ -1122,7 +1235,8 @@ $('#btnTplApply').addEventListener('click',()=>{
   if(!name){ toast('テンプレートを選んでください'); return; }
   const t=fieldTemplates.find(x=>x.name===name); if(!t) return;
   state.fields=normalizeFields(t.fields);
-  markDirty(); renderFields(); renderPhotos(); renderPreview();
+  if(t.coverFields) state.coverFields=normalizeCover(t.coverFields);
+  renderFields(); applyFieldChange();
   toast(`「${name}」を読み込みました`);
 });
 $('#btnTplDelete').addEventListener('click',async()=>{
@@ -1183,7 +1297,7 @@ $('#clearExec').addEventListener('click',async()=>{
   if($('#clearConfirmInput').value.trim()!=='クリア') return; // 二重チェック
   await dbClearAll();
   state={ job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true}, equipment:[], works:[], photos:[],
-          fields:DEFAULT_FIELDS.map(d=>({...d})) };
+          fields:DEFAULT_FIELDS.map(d=>({...d})), coverFields:DEFAULT_COVER.map(d=>({...d})) };
   bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderFields(); renderPreview(); updateCounts();
   clearModal.classList.remove('on');
   toast('全データを削除しました');
@@ -1204,7 +1318,7 @@ function updateCounts(){
                   overallWork:(saved.job&&saved.job.overallWork)||'', showDate:!(saved.job&&saved.job.showDate===false) },
             equipment:saved.equipment||[], works:saved.works||[],
             photos:(saved.photos||[]).map(normalizePhoto),
-            fields:normalizeFields(saved.fields) };
+            fields:normalizeFields(saved.fields), coverFields:normalizeCover(saved.coverFields) };
     // 旧データ互換：現場の作業内容があれば、作業内容が空の写真に引き継ぐ
     const legacyWork = saved.job && saved.job.work;
     if(legacyWork){ state.photos.forEach(p=>{ if(!p.work){ p.work=legacyWork; p.workSrc='manual'; } }); }
