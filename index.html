@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_26</title>
+<title>写真台帳ツール v1_27</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -257,7 +257,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_26</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_27</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -274,8 +274,8 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
     <button class="tab active" data-tab="job">現場情報</button>
     <button class="tab" data-tab="master">機器マスタ <span class="count" id="cntMaster"></span></button>
     <button class="tab" data-tab="works">作業マスタ <span class="count" id="cntWorks"></span></button>
-    <button class="tab" data-tab="photos">写真 <span class="count" id="cntPhotos"></span></button>
     <button class="tab" data-tab="fields">出力項目</button>
+    <button class="tab" data-tab="photos">写真 <span class="count" id="cntPhotos"></span></button>
     <button class="tab" data-tab="preview">プレビュー</button>
   </div>
 </div>
@@ -339,17 +339,6 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
     </div>
   </section>
 
-  <!-- ===== 写真 ===== -->
-  <section class="panel" id="panel-photos">
-    <div class="dropzone" id="dropzone">
-      <div class="big"><button class="tool-btn primary" id="btnPick" style="font-size:14px;">写真を選ぶ</button></div>
-      <div style="margin-top:6px;">スマホ・タブレットは上のボタンから（複数可）。PCはこの枠へドラッグ&ドロップでもOK。</div>
-      <input type="file" id="filePhotos" accept="image/*" multiple hidden>
-    </div>
-    <div id="photoList"></div>
-    <div class="empty-state" id="photoEmpty">まだ写真がありません。上のエリアから追加してください。</div>
-  </section>
-
   <!-- ===== 出力項目 ===== -->
   <section class="panel" id="panel-fields">
     <div class="card">
@@ -360,6 +349,17 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
       <div id="fieldList"></div>
       <div style="margin-top:14px;"><button class="tool-btn" id="btnResetFields">既定に戻す</button></div>
     </div>
+  </section>
+
+  <!-- ===== 写真 ===== -->
+  <section class="panel" id="panel-photos">
+    <div class="dropzone" id="dropzone">
+      <div class="big"><button class="tool-btn primary" id="btnPick" style="font-size:14px;">写真を選ぶ</button></div>
+      <div style="margin-top:6px;">スマホ・タブレットは上のボタンから（複数可）。PCはこの枠へドラッグ&ドロップでもOK。</div>
+      <input type="file" id="filePhotos" accept="image/*" multiple hidden>
+    </div>
+    <div id="photoList"></div>
+    <div class="empty-state" id="photoEmpty">まだ写真がありません。上のエリアから追加してください。</div>
   </section>
 
   <!-- ===== プレビュー ===== -->
@@ -686,30 +686,37 @@ function renderPhotos(){
                 : p.src==='edited' ? '<span class="badge edited">編集</span>' : '';
     const wbadge = p.workSrc==='master' ? '<span class="badge master">マスタ</span>'
                  : p.workSrc==='edited' ? '<span class="badge edited">編集</span>' : '';
+    // 出力項目の設定を反映（ラベル・表示/非表示）。非表示の項目は入力欄も出さない
+    const F={}; normalizeFields(state.fields).forEach(f=>F[f.key]=f);
+    const lbl=(k)=>esc(F[k]?F[k].label:defaultLabelOf(k));
+    const on=(k)=> F[k] ? F[k].show!==false : true;
+    const dateOn = on('date') && state.job.showDate!==false;
+    const eqOn = on('room')||on('system')||on('model')||on('serial');
+
     card.innerHTML=`
       <div class="photo-thumb"><span class="photo-no">No.${idx+1}</span><img src="${p.img}" alt=""></div>
       <div class="photo-body">
-        <div class="mini-field" style="margin-bottom:10px; max-width:220px;"><label>作業日</label>
-          <input type="date" data-k="date" value="${esc(p.date || state.job.date || '')}"></div>
-        <div class="pc-row">
+        ${dateOn?`<div class="mini-field" style="margin-bottom:10px; max-width:220px;"><label>${lbl('date')}</label>
+          <input type="date" data-k="date" value="${esc(p.date || state.job.date || '')}"></div>`:''}
+        ${eqOn?`<div class="pc-row">
           <select class="eq-select" data-pid="${p.id}">${eqOptionsHTML(p.equipId||'__none__')}</select>
           <span class="badge-holder">${badge}</span>
-        </div>
+        </div>`:''}
         <div class="mini-grid">
-          <div class="mini-field"><label>撮影場所(部屋)</label><input data-k="room" value="${esc(p.room)}"></div>
-          <div class="mini-field"><label>系統名</label><input data-k="system" value="${esc(p.system)}"></div>
-          <div class="mini-field"><label>機器型名</label><input data-k="model" value="${esc(p.model)}"></div>
-          <div class="mini-field"><label>製造番号</label><input data-k="serial" value="${esc(p.serial)}"></div>
+          ${on('room')?`<div class="mini-field"><label>${lbl('room')}</label><input data-k="room" value="${esc(p.room)}"></div>`:''}
+          ${on('system')?`<div class="mini-field"><label>${lbl('system')}</label><input data-k="system" value="${esc(p.system)}"></div>`:''}
+          ${on('model')?`<div class="mini-field"><label>${lbl('model')}</label><input data-k="model" value="${esc(p.model)}"></div>`:''}
+          ${on('serial')?`<div class="mini-field"><label>${lbl('serial')}</label><input data-k="serial" value="${esc(p.serial)}"></div>`:''}
         </div>
-        <div class="pc-row" style="margin:12px 0 6px;">
+        ${on('work')?`<div class="pc-row" style="margin:12px 0 6px;">
           <select class="work-select" data-pid="${p.id}">${workOptionsHTML(p.workId||'__none__')}</select>
           <span class="wbadge-holder">${wbadge}</span>
         </div>
-        <div class="mini-field"><label>作業内容</label>
+        <div class="mini-field"><label>${lbl('work')}</label>
           <input data-k="work" value="${esc(p.work)}" placeholder="例：圧縮機交換" ${p.workSrc==='master'?'class="from-master"':''}></div>
-        <button class="link-btn add-work-master" style="display:none;">＋ この作業をマスタに追加</button>
-        <div class="cap-field"><label>写真内容（この1枚が何か・写真ごとに入力）</label>
-          <input data-k="caption" value="${esc(p.caption)}" placeholder="例：交換前 / 交換後 / 機器外観"></div>
+        <button class="link-btn add-work-master" style="display:none;">＋ この作業をマスタに追加</button>`:''}
+        ${on('caption')?`<div class="cap-field"><label>${lbl('caption')}（この1枚が何か・写真ごとに入力）</label>
+          <input data-k="caption" value="${esc(p.caption)}" placeholder="例：交換前 / 交換後 / 機器外観"></div>`:''}
         <div class="pc-foot">
           <span class="drag-handle" title="ドラッグで並べ替え" aria-label="ドラッグで並べ替え">⠿</span>
           <button class="order-btn up" title="上へ" ${idx===0?'disabled':''}>▲</button>
@@ -722,7 +729,7 @@ function renderPhotos(){
 
     // 機器プルダウン
     const sel=card.querySelector('.eq-select');
-    sel.addEventListener('change',()=>{
+    if(sel) sel.addEventListener('change',()=>{
       const v=sel.value;
       if(v==='__none__'){ p.equipId=''; p.system=''; p.model=''; p.serial=''; p.room=''; p.src=''; }
       else{
@@ -744,7 +751,7 @@ function renderPhotos(){
 
     // 作業内容プルダウン
     const wsel=card.querySelector('.work-select');
-    wsel.addEventListener('change',()=>{
+    if(wsel) wsel.addEventListener('change',()=>{
       const v=wsel.value;
       if(v==='__none__'){ p.workId=''; p.work=''; p.workSrc=''; }
       else{
@@ -755,7 +762,7 @@ function renderPhotos(){
     });
     // 作業内容：手直し（上書き）
     const winp=card.querySelector('[data-k="work"]');
-    winp.addEventListener('input',()=>{
+    if(winp) winp.addEventListener('input',()=>{
       p.work=winp.value;
       if(p.workSrc==='master'){ p.workSrc='edited'; }
       else if(!p.workSrc){ p.workSrc='manual'; }
@@ -763,7 +770,7 @@ function renderPhotos(){
     });
     // 作業をマスタに追加
     const awm=card.querySelector('.add-work-master');
-    awm.addEventListener('click',()=>{
+    if(awm) awm.addEventListener('click',()=>{
       const w={id:uid(),name:p.work}; state.works.push(w);
       p.workId=w.id; p.workSrc='master';
       markDirty(); renderWorks(); renderPhotos();
@@ -772,11 +779,11 @@ function renderPhotos(){
 
     // 作業日（写真ごと）
     const dinp=card.querySelector('[data-k="date"]');
-    dinp.addEventListener('input',()=>{ p.date=dinp.value; markDirty(); });
+    if(dinp) dinp.addEventListener('input',()=>{ p.date=dinp.value; markDirty(); });
 
     // 写真内容（キャプション）
     const cap=card.querySelector('[data-k="caption"]');
-    cap.addEventListener('input',()=>{ p.caption=cap.value; markDirty(); });
+    if(cap) cap.addEventListener('input',()=>{ p.caption=cap.value; markDirty(); });
 
     // 並べ替え（ボタン）
     card.querySelector('.up').addEventListener('click',()=>move(idx,-1));
@@ -802,7 +809,7 @@ function renderPhotos(){
   updateCounts();
 }
 function updateBadge(card,p){
-  const h=card.querySelector('.badge-holder');
+  const h=card.querySelector('.badge-holder'); if(!h) return;
   h.innerHTML = p.src==='master' ? '<span class="badge master">マスタ</span>'
               : p.src==='edited' ? '<span class="badge edited">編集</span>' : '';
 }
@@ -992,11 +999,11 @@ function renderFields(){
       <input type="text" value="${esc(f.label)}" placeholder="PDFに出す見出し">`;
     // 表示/非表示
     row.querySelector('input[type=checkbox]').addEventListener('change',(e)=>{
-      f.show=e.target.checked; row.classList.toggle('off',!f.show); markDirty(); renderPreview();
+      f.show=e.target.checked; row.classList.toggle('off',!f.show); markDirty(); renderPhotos(); renderPreview();
     });
     // ラベル名
     row.querySelector('input[type=text]').addEventListener('input',(e)=>{
-      f.label=e.target.value; markDirty(); renderPreview();
+      f.label=e.target.value; markDirty(); renderPhotos(); renderPreview();
     });
     // ドラッグ並べ替え
     const h=row.querySelector('.drag-handle');
@@ -1036,7 +1043,7 @@ function startFieldDrag(e,row,handle){
       const [mv]=arr.splice(fi,1);
       if(atEnd||targetKey==null) arr.push(mv);
       else{ const ti=arr.findIndex(x=>x.key===targetKey); arr.splice(ti<0?arr.length:ti,0,mv); }
-      markDirty(); renderFields(); renderPreview();
+      markDirty(); renderFields(); renderPhotos(); renderPreview();
     }
   };
   handle.addEventListener('pointermove',onMove);
@@ -1046,7 +1053,7 @@ function startFieldDrag(e,row,handle){
 $('#btnResetFields').addEventListener('click',()=>{
   if(!confirm('出力項目の設定を既定に戻しますか？')) return;
   state.fields=DEFAULT_FIELDS.map(d=>({...d}));
-  markDirty(); renderFields(); renderPreview(); toast('出力項目を既定に戻しました');
+  markDirty(); renderFields(); renderPhotos(); renderPreview(); toast('出力項目を既定に戻しました');
 });
 
 /* ---------- 小さい端末ではPDF出力の注意書きを表示 ---------- */
