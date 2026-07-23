@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_31</title>
+<title>写真台帳ツール v1_32</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -268,7 +268,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_31</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_32</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -657,6 +657,29 @@ function eqLabel(e){
   const parts=fs.map(f=> equipValue(e,f.id) || `(${f.label}なし)`);
   return parts.length? parts.join(' / ') : '(未登録)';
 }
+/* マスタの内容を、そのマスタを選んでいる写真へ反映する。
+   ただし手直し済み（src==='edited'）の写真は上書きしない＝個別の上書きを壊さない */
+function syncPhotosFromEquip(e){
+  let changed=false;
+  state.photos.forEach(p=>{
+    if(p.equipId!==e.id || p.src!=='master') return;
+    equipFields().forEach(f=>{
+      const v=equipValue(e,f.id);
+      if(((p.values&&p.values[f.id])||'')!==v){ setPhotoValue(p,f.id,v); changed=true; }
+    });
+  });
+  return changed;
+}
+/* 作業マスタも同様に反映 */
+function syncPhotosFromWork(w){
+  const wf=workField(); if(!wf) return false;
+  let changed=false;
+  state.photos.forEach(p=>{
+    if(p.workId!==w.id || p.workSrc!=='master') return;
+    if(((p.values&&p.values[wf.id])||'')!==w.name){ setPhotoValue(p,wf.id,w.name); changed=true; }
+  });
+  return changed;
+}
 function renderMaster(){
   const fs=equipFields();
   $('#eqHead').innerHTML='<tr>'+fs.map(f=>`<th>${esc(f.label)}</th>`).join('')+'<th class="act"></th></tr>';
@@ -678,7 +701,9 @@ function renderMaster(){
       inp.addEventListener('input',()=>{
         if(!e.values) e.values={};
         e.values[inp.dataset.k]=inp.value;
+        const changed = syncPhotosFromEquip(e);   // 選択中かつ未編集の写真へ反映
         markDirty(); refreshPhotoSelects();
+        if(changed) renderPhotos();
       });
     });
     tr.querySelector('.del').addEventListener('click',()=>{
@@ -707,7 +732,12 @@ function renderWorks(){
       <td class="act"><button class="icon-btn del" title="削除">✕</button></td>`;
     const inp=tr.querySelector('input');
     inp.value=w.name||'';
-    inp.addEventListener('input',()=>{ w.name=inp.value; markDirty(); refreshWorkSelects(); });
+    inp.addEventListener('input',()=>{
+      w.name=inp.value;
+      const changed=syncPhotosFromWork(w);
+      markDirty(); refreshWorkSelects();
+      if(changed) renderPhotos();
+    });
     tr.querySelector('.del').addEventListener('click',()=>{
       state.works=state.works.filter(x=>x.id!==w.id);
       markDirty(); renderWorks(); refreshWorkSelects(); updateCounts();

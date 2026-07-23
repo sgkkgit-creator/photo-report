@@ -4,7 +4,7 @@
    ・バージョンを上げるとき（新しいindex.htmlを上げるとき）は、下のCACHE名の末尾を変える
      → ブラウザが更新を検知し、古いキャッシュを自動で捨てて最新化します
 */
-const CACHE = 'shashin-daicho-v1_31';
+const CACHE = 'shashin-daicho-v1_32';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
