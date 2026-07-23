@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_29</title>
+<title>写真台帳ツール v1_30</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -172,6 +172,9 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 .field-row input[type=text]{flex:1; min-width:120px; padding:7px 9px; border:1px solid var(--line); border-radius:7px;}
 .field-row input[type=checkbox]{width:auto;}
 .field-row.dragging{opacity:.55; box-shadow:0 8px 20px rgba(20,30,40,.16);}
+.field-row select.f-role{padding:6px 8px; border:1px solid var(--line); border-radius:7px; background:#fff; font-size:12.5px;}
+.field-row .f-role-fixed{font-size:11.5px; color:var(--muted); background:#F2F5F6; border-radius:6px; padding:5px 9px; white-space:nowrap;}
+.field-row .f-del{margin-left:auto;}
 
 /* ---------- 出力項目テンプレート ---------- */
 .tpl-bar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:12px; background:#F5F8F9;
@@ -265,7 +268,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_29</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_30</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -324,7 +327,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
     <div class="card">
       <div class="section-eyebrow">Step 2</div>
       <h2 class="sec-title">機器マスタ</h2>
-      <p class="hint">現場にある機器を一度だけ登録します。写真ではここから「選ぶだけ」で系統名・型名・製番・部屋が自動で入ります。</p>
+      <p class="hint">現場にある機器を一度だけ登録します。写真ではここから「選ぶだけ」で各項目が自動で入ります。列の内容は「出力項目」タブで自由に変えられます。</p>
       <table class="eq-table">
         <thead id="eqHead"></thead>
         <tbody id="eqBody"></tbody>
@@ -352,8 +355,9 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
     <div class="card">
       <div class="section-eyebrow">出力設定</div>
       <h2 class="sec-title">出力項目（写真の右側）</h2>
-      <p class="hint">PDFに出す項目を顧客ごとに変えられます。チェックを外すと出力されません（入力したデータは消えず、戻せば再び出ます）。見出しの文字は自由に変更でき、⠿ をドラッグすると並び順が変わります。<br>
-        <b>ここで決めた呼び名は、現場情報・機器マスタ・作業マスタ・写真の入力欄にもすべて反映されます</b>（呼び名は常に一致します）。この設定は写真台帳データに含まれるので、書き出して別のPCで読み込んでも同じ体裁になります。</p>
+      <p class="hint">台帳の項目を顧客ごとに自由に決められます。項目名の変更・追加・削除、⠿ドラッグでの並べ替えができます。<br>
+        各項目の「どこから入るか」は2種類です。<b>機器マスタから</b>＝機器を選ぶと自動で入る（何枚も同じ値が続く項目向け）／<b>写真ごとに入力</b>＝1枚ずつ手で入れる。<br>
+        <b>ここで決めた内容は、機器マスタ・写真の入力欄・PDFのすべてに反映されます</b>。この設定は写真台帳データに含まれるので、書き出して別のPCで読み込んでも同じ体裁になります。</p>
       <div class="tpl-bar">
         <span class="tpl-label">テンプレート</span>
         <select id="tplSelect"><option value="">（選択してください）</option></select>
@@ -368,7 +372,10 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
       <h3 style="font-size:13px; margin:22px 0 8px; color:var(--muted); letter-spacing:.04em;">各写真の右側</h3>
       <div id="fieldList"></div>
 
-      <div style="margin-top:18px;"><button class="tool-btn" id="btnResetFields">すべて既定に戻す</button></div>
+      <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="tool-btn" id="btnAddField">＋ 項目を追加</button>
+        <button class="tool-btn" id="btnResetFields">すべて既定に戻す</button>
+      </div>
     </div>
   </section>
 
@@ -435,23 +442,33 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
    }
    src / workSrc: '' | 'master'(転記) | 'edited'(転記後に手直し) | 'manual'(手入力)
    ========================================================= */
-let state = { job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true}, equipment:[], works:[], photos:[], fields:null, coverFields:null };
+let state = { job:{building:'',date:'',dateEnd:'',overallWork:'',showDate:true},
+              equipment:[], works:[], photos:[], fields:null, coverFields:null };
 
-/* 出力項目（写真の右側に出る欄）の既定設定
-   key   … データのどの値を出すか（変更不可の内部名）
-   label … PDFに出る見出し（変更可）
-   show  … 出力するか
-   並び順 … この配列の順そのもの（ドラッグで変更） */
+/* =========================================================
+   出力項目（自由定義）
+   1項目 = {id, label, show, role}
+     id    … 内部の識別子（データはこのidで保存される。変更しない）
+     label … 画面とPDFに出る呼び名（自由に変更可）
+     show  … 使う／使わない
+     role  … 値がどこから来るか
+       'equip'  機器マスタから（機器を選ぶと自動で入る）
+       'photo'  写真ごとに手入力
+       'work'   作業マスタから（1つだけ）
+       'date'   日付（1つだけ）
+   並び順 = この配列の順（ドラッグで変更）
+   ========================================================= */
+const ROLE_LABELS = {equip:'機器マスタから', photo:'写真ごとに入力', work:'作業マスタから', date:'日付'};
 const DEFAULT_FIELDS = [
-  {key:'date',    label:'作業日',   show:true},
-  {key:'room',    label:'撮影場所', show:true},
-  {key:'system',  label:'系統名',   show:true},
-  {key:'model',   label:'機器型名', show:true},
-  {key:'serial',  label:'製造番号', show:true},
-  {key:'work',    label:'作業内容', show:true},
-  {key:'caption', label:'内容',     show:true},
+  {id:'date',    label:'作業日',   show:true, role:'date'},
+  {id:'room',    label:'撮影場所', show:true, role:'equip'},
+  {id:'system',  label:'系統名',   show:true, role:'equip'},
+  {id:'model',   label:'機器型名', show:true, role:'equip'},
+  {id:'serial',  label:'製造番号', show:true, role:'equip'},
+  {id:'work',    label:'作業内容', show:true, role:'work'},
+  {id:'caption', label:'内容',     show:true, role:'photo'},
 ];
-/* 表紙（1ページ目）に出す項目。ラベルと表示/非表示を変更できる */
+/* 表紙（1ページ目）に出す項目 */
 const DEFAULT_COVER = [
   {key:'building',    label:'現場名',   show:true},
   {key:'overallWork', label:'作業内容', show:true},
@@ -464,41 +481,70 @@ function normalizeCover(f){
   DEFAULT_COVER.forEach(d=>{ if(!out.some(o=>o.key===d.key)) out.push({...d}); });
   return out;
 }
-/* 出力項目のラベルを取得（画面のあちこちで同じ呼び名を使うための唯一の入口） */
-function labelOf(key){
-  const f=normalizeFields(state.fields).find(x=>x.key===key);
-  if(f) return f.label;
-  const c=normalizeCover(state.coverFields).find(x=>x.key===key);
-  return c ? c.label : key;
-}
-function isShown(key){
-  const f=normalizeFields(state.fields).find(x=>x.key===key);
-  return f ? f.show!==false : true;
-}
+/* 項目リストを整える。旧形式（key を使っていた版）からも移行する */
 function normalizeFields(f){
-  const src = Array.isArray(f) ? f : [];
-  const out = [];
-  // 保存済みの並び・設定を優先しつつ、既知のキーだけ拾う
-  src.forEach(x=>{
-    const def = DEFAULT_FIELDS.find(d=>d.key===x.key);
-    if(def && !out.some(o=>o.key===x.key)){
-      out.push({key:def.key, label:(x.label??def.label), show:x.show!==false});
-    }
+  if(!Array.isArray(f) || f.length===0) return DEFAULT_FIELDS.map(d=>({...d}));
+  const out=[];
+  f.forEach(x=>{
+    const id = x.id || x.key;                      // 旧形式は key だった
+    if(!id || out.some(o=>o.id===id)) return;
+    const def = DEFAULT_FIELDS.find(d=>d.id===id);
+    out.push({
+      id,
+      label: x.label ?? (def?def.label:id),
+      show:  x.show!==false,
+      role:  x.role || (def?def.role:'equip')      // 役割が無ければ既定、無ければ機器扱い
+    });
   });
-  // 新しく増えた項目は末尾に補完（将来の追加に備える）
-  DEFAULT_FIELDS.forEach(d=>{ if(!out.some(o=>o.key===d.key)) out.push({...d}); });
-  return out;
+  // 特殊項目（日付・作業）は最大1つに整理
+  let seenDate=false, seenWork=false;
+  out.forEach(f2=>{
+    if(f2.role==='date'){ if(seenDate) f2.role='photo'; seenDate=true; }
+    if(f2.role==='work'){ if(seenWork) f2.role='photo'; seenWork=true; }
+  });
+  return out.length? out : DEFAULT_FIELDS.map(d=>({...d}));
 }
-/* 写真1件から、指定キーの表示値を取り出す */
-function fieldValue(p, key){
-  if(key==='date') return fmtDate(p.date || state.job.date);
-  return p[key] ?? '';
+function getFields(){ return normalizeFields(state.fields); }
+function fieldById(id){ return getFields().find(f=>f.id===id); }
+function labelOf(id){
+  const f=fieldById(id); if(f) return f.label;
+  const c=normalizeCover(state.coverFields).find(x=>x.key===id);
+  return c ? c.label : id;
 }
+function isShown(id){ const f=fieldById(id); return f ? f.show!==false : true; }
+function equipFields(){ return getFields().filter(f=>f.role==='equip' && f.show!==false); }
+function dateField(){ return getFields().find(f=>f.role==='date'); }
+function workField(){ return getFields().find(f=>f.role==='work'); }
 
-/* 写真オブジェクトに必要なキーを補完（旧データ読込時の互換用） */
+/* 写真1件から、指定項目の値を取り出す */
+function photoValue(p, f){
+  const v = (p.values && p.values[f.id]) ?? '';
+  if(f.role==='date') return fmtDate(v || state.job.date);
+  return v;
+}
+function setPhotoValue(p, id, v){ if(!p.values) p.values={}; p.values[id]=v; }
+function equipValue(e, id){ return (e.values && e.values[id]) ?? ''; }
+
+/* 旧形式の写真データを新形式（values）へ移行 */
 function normalizePhoto(p){
-  return Object.assign({id:uid(), img:'', date:'', equipId:'', system:'',model:'',serial:'',room:'', src:'',
-                        workId:'', work:'', workSrc:'', caption:''}, p);
+  const o = Object.assign({id:uid(), img:'', equipId:'', src:'', workId:'', workSrc:'', values:{}}, p);
+  if(!o.values || typeof o.values!=='object') o.values={};
+  // 旧: p.room / p.system / ... を values へ移す
+  ['date','room','system','model','serial','work','caption'].forEach(k=>{
+    if(o[k]!==undefined && o[k]!=='' && o.values[k]===undefined){ o.values[k]=o[k]; }
+    delete o[k];
+  });
+  return o;
+}
+/* 旧形式の機器データを新形式（values）へ移行 */
+function normalizeEquip(e){
+  const o = Object.assign({id:uid(), values:{}}, e);
+  if(!o.values || typeof o.values!=='object') o.values={};
+  ['system','model','serial','room'].forEach(k=>{
+    if(o[k]!==undefined && o[k]!=='' && o.values[k]===undefined){ o.values[k]=o[k]; }
+    delete o[k];
+  });
+  return o;
 }
 
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -606,27 +652,34 @@ function refreshJobLabels(){
 
 /* ---------- 機器マスタ ---------- */
 function eqLabel(e){
-  // 表示する項目・順序は「出力項目」タブの設定に合わせる
-  const keys=['system','model','serial','room'].filter(isShown);
-  const parts=keys.map(k=> e[k] || `(${labelOf(k)}なし)`);
+  // 表示する項目・順序は「出力項目」タブの設定に従う
+  const fs=equipFields();
+  const parts=fs.map(f=> equipValue(e,f.id) || `(${f.label}なし)`);
   return parts.length? parts.join(' / ') : '(機器)';
 }
 function renderMaster(){
-  // 列の見出し・使う列は「出力項目」タブの設定に従う（呼び名を一元管理するため）
-  const cols=['system','model','serial','room'].filter(isShown);
-  $('#eqHead').innerHTML='<tr>'+cols.map(k=>`<th>${esc(labelOf(k))}</th>`).join('')+'<th class="act"></th></tr>';
+  const fs=equipFields();
+  $('#eqHead').innerHTML='<tr>'+fs.map(f=>`<th>${esc(f.label)}</th>`).join('')+'<th class="act"></th></tr>';
   const body=$('#eqBody'); body.innerHTML='';
+  if(fs.length===0){
+    body.innerHTML='<tr><td class="eq-empty">「出力項目」タブで、機器マスタから入る項目を用意してください。</td></tr>';
+    updateCounts(); return;
+  }
   if(state.equipment.length===0){
-    body.innerHTML=`<tr><td colspan="${cols.length+1}" class="eq-empty">機器がまだありません。「＋ 機器を追加」から登録してください。</td></tr>`;
+    body.innerHTML=`<tr><td colspan="${fs.length+1}" class="eq-empty">機器がまだありません。「＋ 機器を追加」から登録してください。</td></tr>`;
   }
   state.equipment.forEach((e)=>{
     const tr=document.createElement('tr');
     tr.innerHTML=
-      cols.map(k=>`<td><input data-k="${k}" placeholder="${esc(labelOf(k))}"></td>`).join('')+
+      fs.map(f=>`<td><input data-k="${esc(f.id)}" placeholder="${esc(f.label)}"></td>`).join('')+
       '<td class="act"><button class="icon-btn del" title="削除">✕</button></td>';
     tr.querySelectorAll('input').forEach(inp=>{
-      inp.value=e[inp.dataset.k]||'';
-      inp.addEventListener('input',()=>{ e[inp.dataset.k]=inp.value; markDirty(); refreshPhotoSelects(); });
+      inp.value=equipValue(e,inp.dataset.k);
+      inp.addEventListener('input',()=>{
+        if(!e.values) e.values={};
+        e.values[inp.dataset.k]=inp.value;
+        markDirty(); refreshPhotoSelects();
+      });
     });
     tr.querySelector('.del').addEventListener('click',()=>{
       state.equipment=state.equipment.filter(x=>x.id!==e.id);
@@ -637,7 +690,7 @@ function renderMaster(){
   updateCounts();
 }
 $('#btnAddEq').addEventListener('click',()=>{
-  state.equipment.push({id:uid(),system:'',model:'',serial:'',room:''});
+  state.equipment.push({id:uid(), values:{}});
   markDirty(); renderMaster(); refreshPhotoSelects();
 });
 
@@ -698,14 +751,17 @@ async function addPhotoFiles(files){
     try{ data=await downscale(imgs[i]); }catch(e){ data=null; }
     if(!data){ data=await readAsDataURL(imgs[i]); }   // 縮小失敗→原本で取り込む
     if(data){
-      // 直前の写真から「機器＋作業内容」を引き継ぐ（写真内容・作業日は引き継がない）
-      // 作業日は未設定のまま → 表示/出力時に「作業開始日」へフォールバック（手動変更で上書き）
+      // 直前の写真から「機器＋作業内容」を引き継ぐ（写真ごとの項目・日付は引き継がない）
       const prev=state.photos[state.photos.length-1];
-      const inherit = prev ? {
-        equipId:prev.equipId, system:prev.system, model:prev.model, serial:prev.serial, room:prev.room, src:prev.src,
-        workId:prev.workId, work:prev.work, workSrc:prev.workSrc
-      } : {};
-      state.photos.push(normalizePhoto(Object.assign({id:uid(), img:data, caption:''}, inherit)));
+      const np=normalizePhoto({id:uid(), img:data, values:{}});
+      if(prev){
+        np.equipId=prev.equipId; np.src=prev.src;
+        np.workId=prev.workId;   np.workSrc=prev.workSrc;
+        equipFields().forEach(f=>{ np.values[f.id]=(prev.values&&prev.values[f.id])||''; });
+        const wf=workField();
+        if(wf) np.values[wf.id]=(prev.values&&prev.values[wf.id])||'';
+      }
+      state.photos.push(np);
       ok++;
     }
     else{ ng++; }
@@ -754,43 +810,57 @@ function refreshWorkSelects(){
 function renderPhotos(){
   const list=$('#photoList'); list.innerHTML='';
   $('#photoEmpty').style.display=state.photos.length? 'none':'block';
+  const fields=getFields().filter(f=>f.show!==false);
+  const showDateGlobal = state.job.showDate!==false;
+
   state.photos.forEach((p,idx)=>{
     const card=document.createElement('div'); card.className='photo-card'; card.dataset.pid=p.id;
     const badge = p.src==='master' ? '<span class="badge master">マスタ</span>'
                 : p.src==='edited' ? '<span class="badge edited">編集</span>' : '';
     const wbadge = p.workSrc==='master' ? '<span class="badge master">マスタ</span>'
                  : p.workSrc==='edited' ? '<span class="badge edited">編集</span>' : '';
-    // 出力項目の設定を反映（ラベル・表示/非表示）。非表示の項目は入力欄も出さない
-    const F={}; normalizeFields(state.fields).forEach(f=>F[f.key]=f);
-    const lbl=(k)=>esc(F[k]?F[k].label:defaultLabelOf(k));
-    const on=(k)=> F[k] ? F[k].show!==false : true;
-    const dateOn = on('date') && state.job.showDate!==false;
-    const eqOn = on('room')||on('system')||on('model')||on('serial');
+
+    // 入力欄を「出力項目」の順に組み立てる。機器マスタ系はまとめて1つのプルダウンを付ける
+    let bodyHTML='';
+    let equipDone=false;
+    fields.forEach(f=>{
+      const v = (p.values&&p.values[f.id])||'';
+      if(f.role==='date'){
+        if(!showDateGlobal) return;
+        bodyHTML+=`<div class="mini-field" style="margin-bottom:10px; max-width:220px;"><label>${esc(f.label)}</label>
+          <input type="date" data-fid="${esc(f.id)}" value="${esc(v || state.job.date || '')}"></div>`;
+      }else if(f.role==='equip'){
+        if(!equipDone){
+          equipDone=true;
+          bodyHTML+=`<div class="pc-row">
+            <select class="eq-select" data-pid="${p.id}">${eqOptionsHTML(p.equipId||'__none__')}</select>
+            <span class="badge-holder">${badge}</span>
+          </div><div class="mini-grid">`;
+        }
+        bodyHTML+=`<div class="mini-field"><label>${esc(f.label)}</label>
+          <input data-fid="${esc(f.id)}" class="eq-input${p.src==='master'?' from-master':''}" value="${esc(v)}"></div>`;
+      }else{
+        if(equipDone){ bodyHTML+='</div>'; equipDone='closed'; }   // mini-grid を閉じる
+        if(f.role==='work'){
+          bodyHTML+=`<div class="pc-row" style="margin:12px 0 6px;">
+            <select class="work-select" data-pid="${p.id}">${workOptionsHTML(p.workId||'__none__')}</select>
+            <span class="wbadge-holder">${wbadge}</span>
+          </div>
+          <div class="mini-field"><label>${esc(f.label)}</label>
+            <input data-fid="${esc(f.id)}" class="work-input${p.workSrc==='master'?' from-master':''}" value="${esc(v)}" placeholder="例：圧縮機交換"></div>
+          <button class="link-btn add-work-master" style="display:none;">＋ この作業をマスタに追加</button>`;
+        }else{
+          bodyHTML+=`<div class="cap-field"><label>${esc(f.label)}</label>
+            <input data-fid="${esc(f.id)}" value="${esc(v)}" placeholder="例：交換前 / 交換後 / 機器外観"></div>`;
+        }
+      }
+    });
+    if(equipDone===true) bodyHTML+='</div>';   // 機器欄で終わっていたら閉じる
 
     card.innerHTML=`
       <div class="photo-thumb"><span class="photo-no">No.${idx+1}</span><img src="${p.img}" alt=""></div>
       <div class="photo-body">
-        ${dateOn?`<div class="mini-field" style="margin-bottom:10px; max-width:220px;"><label>${lbl('date')}</label>
-          <input type="date" data-k="date" value="${esc(p.date || state.job.date || '')}"></div>`:''}
-        ${eqOn?`<div class="pc-row">
-          <select class="eq-select" data-pid="${p.id}">${eqOptionsHTML(p.equipId||'__none__')}</select>
-          <span class="badge-holder">${badge}</span>
-        </div>`:''}
-        <div class="mini-grid">
-          ${on('room')?`<div class="mini-field"><label>${lbl('room')}</label><input data-k="room" value="${esc(p.room)}"></div>`:''}
-          ${on('system')?`<div class="mini-field"><label>${lbl('system')}</label><input data-k="system" value="${esc(p.system)}"></div>`:''}
-          ${on('model')?`<div class="mini-field"><label>${lbl('model')}</label><input data-k="model" value="${esc(p.model)}"></div>`:''}
-          ${on('serial')?`<div class="mini-field"><label>${lbl('serial')}</label><input data-k="serial" value="${esc(p.serial)}"></div>`:''}
-        </div>
-        ${on('work')?`<div class="pc-row" style="margin:12px 0 6px;">
-          <select class="work-select" data-pid="${p.id}">${workOptionsHTML(p.workId||'__none__')}</select>
-          <span class="wbadge-holder">${wbadge}</span>
-        </div>
-        <div class="mini-field"><label>${lbl('work')}</label>
-          <input data-k="work" value="${esc(p.work)}" placeholder="例：圧縮機交換" ${p.workSrc==='master'?'class="from-master"':''}></div>
-        <button class="link-btn add-work-master" style="display:none;">＋ この作業をマスタに追加</button>`:''}
-        ${on('caption')?`<div class="cap-field"><label>${lbl('caption')}（この1枚が何か・写真ごとに入力）</label>
-          <input data-k="caption" value="${esc(p.caption)}" placeholder="例：交換前 / 交換後 / 機器外観"></div>`:''}
+        ${bodyHTML}
         <div class="pc-foot">
           <span class="drag-handle" title="ドラッグで並べ替え" aria-label="ドラッグで並べ替え">⠿</span>
           <button class="order-btn up" title="上へ" ${idx===0?'disabled':''}>▲</button>
@@ -801,78 +871,75 @@ function renderPhotos(){
         </div>
       </div>`;
 
+    // すべての入力欄：値を保存
+    card.querySelectorAll('[data-fid]').forEach(inp=>{
+      const fid=inp.dataset.fid;
+      const f=fields.find(x=>x.id===fid);
+      inp.addEventListener('input',()=>{
+        setPhotoValue(p,fid,inp.value);
+        if(f && f.role==='equip'){
+          if(p.src==='master') p.src='edited';
+          inp.classList.remove('from-master');
+          updateBadge(card,p); updateAddMaster(card,p);
+        }
+        if(f && f.role==='work'){
+          if(p.workSrc==='master') p.workSrc='edited';
+          else if(!p.workSrc) p.workSrc='manual';
+          inp.classList.remove('from-master');
+          updateWBadge(card,p); updateAddWorkMaster(card,p);
+        }
+        markDirty();
+      });
+    });
+
     // 機器プルダウン
     const sel=card.querySelector('.eq-select');
     if(sel) sel.addEventListener('change',()=>{
       const v=sel.value;
-      if(v==='__none__'){ p.equipId=''; p.system=''; p.model=''; p.serial=''; p.room=''; p.src=''; }
-      else{
+      if(v==='__none__'){
+        p.equipId=''; p.src='';
+        equipFields().forEach(f=>setPhotoValue(p,f.id,''));
+      }else{
         const e=state.equipment.find(x=>x.id===v);
-        if(e){ p.equipId=e.id; p.system=e.system; p.model=e.model; p.serial=e.serial; p.room=e.room; p.src='master'; }
+        if(e){ p.equipId=e.id; p.src='master';
+          equipFields().forEach(f=>setPhotoValue(p,f.id, equipValue(e,f.id))); }
       }
       markDirty(); renderPhotos();
     });
 
-    // 機器4項目：手直し（上書き）※mini-grid内だけを対象にする
-    card.querySelectorAll('.mini-grid .mini-field input').forEach(inp=>{
-      if(p.src==='master') inp.classList.add('from-master');
-      inp.addEventListener('input',()=>{
-        p[inp.dataset.k]=inp.value;
-        if(p.src==='master'){ p.src='edited'; } // 転記後に触ったら「編集」表示に
-        markDirty(); updateBadge(card,p); updateAddMaster(card,p); inp.classList.remove('from-master');
-      });
-    });
-
-    // 作業内容プルダウン
+    // 作業プルダウン
     const wsel=card.querySelector('.work-select');
     if(wsel) wsel.addEventListener('change',()=>{
+      const wf=workField(); if(!wf) return;
       const v=wsel.value;
-      if(v==='__none__'){ p.workId=''; p.work=''; p.workSrc=''; }
-      else{
-        const w=state.works.find(x=>x.id===v);
-        if(w){ p.workId=w.id; p.work=w.name; p.workSrc='master'; }
-      }
+      if(v==='__none__'){ p.workId=''; setPhotoValue(p,wf.id,''); p.workSrc=''; }
+      else{ const w=state.works.find(x=>x.id===v);
+        if(w){ p.workId=w.id; setPhotoValue(p,wf.id,w.name); p.workSrc='master'; } }
       markDirty(); renderPhotos();
     });
-    // 作業内容：手直し（上書き）
-    const winp=card.querySelector('[data-k="work"]');
-    if(winp) winp.addEventListener('input',()=>{
-      p.work=winp.value;
-      if(p.workSrc==='master'){ p.workSrc='edited'; }
-      else if(!p.workSrc){ p.workSrc='manual'; }
-      markDirty(); updateWBadge(card,p); updateAddWorkMaster(card,p); winp.classList.remove('from-master');
-    });
+
     // 作業をマスタに追加
     const awm=card.querySelector('.add-work-master');
     if(awm) awm.addEventListener('click',()=>{
-      const w={id:uid(),name:p.work}; state.works.push(w);
+      const wf=workField(); if(!wf) return;
+      const w={id:uid(),name:(p.values&&p.values[wf.id])||''}; state.works.push(w);
       p.workId=w.id; p.workSrc='master';
       markDirty(); renderWorks(); renderPhotos();
     });
     updateAddWorkMaster(card,p);
 
-    // 作業日（写真ごと）
-    const dinp=card.querySelector('[data-k="date"]');
-    if(dinp) dinp.addEventListener('input',()=>{ p.date=dinp.value; markDirty(); });
-
-    // 写真内容（キャプション）
-    const cap=card.querySelector('[data-k="caption"]');
-    if(cap) cap.addEventListener('input',()=>{ p.caption=cap.value; markDirty(); });
-
-    // 並べ替え（ボタン）
+    // 並べ替え・削除・マスタ追加
     card.querySelector('.up').addEventListener('click',()=>move(idx,-1));
     card.querySelector('.down').addEventListener('click',()=>move(idx,1));
-    // 並べ替え（ドラッグ：マウス・タッチ両対応）
     const handle=card.querySelector('.drag-handle');
     handle.addEventListener('pointerdown',(e)=>startDrag(e, card, handle));
-    // 削除
     card.querySelector('.del').addEventListener('click',()=>{
       if(confirm('この写真を削除しますか？')){ state.photos.splice(idx,1); markDirty(); renderPhotos(); }
     });
-    // マスタに追加
     const am=card.querySelector('.add-master');
     am.addEventListener('click',()=>{
-      const e={id:uid(),system:p.system,model:p.model,serial:p.serial,room:p.room};
+      const e={id:uid(), values:{}};
+      equipFields().forEach(f=>{ e.values[f.id]=(p.values&&p.values[f.id])||''; });
       state.equipment.push(e); p.equipId=e.id; p.src='master';
       markDirty(); renderMaster(); renderPhotos();
     });
@@ -888,11 +955,11 @@ function updateBadge(card,p){
               : p.src==='edited' ? '<span class="badge edited">編集</span>' : '';
 }
 function updateAddMaster(card,p){
-  // 手入力/編集で、かつ同じ機器がマスタに無いときだけ「マスタに追加」を出す
   const am=card.querySelector('.add-master'); if(!am) return;
-  const hasContent = p.model||p.serial;
-  const inMaster = state.equipment.some(e=>e.model===p.model && e.serial===p.serial && e.room===p.room && (p.model||p.serial));
-  am.style.display = (hasContent && !inMaster && p.src!=='master') ? 'inline-block':'none';
+  const fs=equipFields();
+  const has = fs.some(f=>(p.values&&p.values[f.id]));
+  const inMaster = state.equipment.some(e=> fs.every(f=> equipValue(e,f.id)===((p.values&&p.values[f.id])||'') ));
+  am.style.display = (has && !inMaster && p.src!=='master' && fs.length>0) ? 'inline-block':'none';
 }
 function updateWBadge(card,p){
   const h=card.querySelector('.wbadge-holder'); if(!h) return;
@@ -901,9 +968,10 @@ function updateWBadge(card,p){
 }
 function updateAddWorkMaster(card,p){
   const b=card.querySelector('.add-work-master'); if(!b) return;
-  const has=(p.work||'').trim()!=='';
-  const inMaster=state.works.some(w=>w.name===p.work);
-  b.style.display = (has && !inMaster) ? 'inline-block':'none';
+  const wf=workField(); if(!wf){ b.style.display='none'; return; }
+  const val=((p.values&&p.values[wf.id])||'').trim();
+  const inMaster=state.works.some(w=>w.name===val);
+  b.style.display = (val!=='' && !inMaster) ? 'inline-block':'none';
 }
 function move(i,dir){
   const j=i+dir; if(j<0||j>=state.photos.length) return;
@@ -1000,14 +1068,14 @@ function buildLedgerHTML(){
   }
   // --- 写真ページ（2ページ目以降） ---
   // 出力項目は「設定」タブの内容（表示/ラベル/並び順）に従う
-  const fields = normalizeFields(state.fields).filter(f=>{
-    if(!f.show) return false;
-    if(f.key==='date' && !showDate) return false;  // 作業日の表示チェックも尊重
+  const fields = getFields().filter(f=>{
+    if(f.show===false) return false;
+    if(f.role==='date' && !showDate) return false;   // 作業日の表示チェックも尊重
     return true;
   });
   html+='<div class="pv-photos">';
   state.photos.forEach((p,i)=>{
-    const rows = fields.map(f=>`<tr><th>${esc(f.label)}</th><td>${esc(fieldValue(p,f.key))}</td></tr>`).join('');
+    const rows = fields.map(f=>`<tr><th>${esc(f.label)}</th><td>${esc(photoValue(p,f))}</td></tr>`).join('');
     html+=`<div class="pv-block">
       <div class="pv-photo${p.img?'':' blank'}">${p.img?`<img src="${p.img}">`:'（写真なし）'}</div>
       <div class="pv-meta">
@@ -1051,7 +1119,7 @@ $('#fileImport').addEventListener('change',e=>{
       if(!confirm('読み込むと今のデータは完全に置き換わります。よろしいですか？')) return;
       state={ job:{ building:(data.job&&data.job.building)||'', date:(data.job&&data.job.date)||'', dateEnd:(data.job&&data.job.dateEnd)||'',
                     overallWork:(data.job&&data.job.overallWork)||'', showDate:!(data.job&&data.job.showDate===false) },
-              equipment:data.equipment||[], works:data.works||[],
+              equipment:(data.equipment||[]).map(normalizeEquip), works:data.works||[],
               photos:(data.photos||[]).map(normalizePhoto),
               fields:normalizeFields(data.fields), coverFields:normalizeCover(data.coverFields) };
       bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderFields(); renderPreview(); markDirty();
@@ -1127,41 +1195,55 @@ function startCoverDrag(e,row,handle){
 }
 function renderFields(){
   renderCoverFields();
-  state.fields = normalizeFields(state.fields);
+  state.fields = getFields();
   const list=$('#fieldList'); list.innerHTML='';
   state.fields.forEach((f)=>{
     const row=document.createElement('div');
-    row.className='field-row'+(f.show?'':' off');
-    row.dataset.key=f.key;
+    row.className='field-row'+(f.show!==false?'':' off');
+    row.dataset.fid=f.id;
+    const locked = (f.role==='date'||f.role==='work');   // 特殊項目は役割を変えられない
     row.innerHTML=`
       <span class="drag-handle" title="ドラッグで並べ替え">⠿</span>
       <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-        <input type="checkbox" ${f.show?'checked':''}> <span style="font-size:12.5px; font-weight:600;">出力</span>
+        <input type="checkbox" class="f-show" ${f.show!==false?'checked':''}> <span style="font-size:12.5px; font-weight:600;">出力</span>
       </label>
-      <span class="fname">${esc(defaultLabelOf(f.key))}</span>
-      <input type="text" value="${esc(f.label)}" placeholder="PDFに出す見出し">`;
-    // 表示/非表示
-    row.querySelector('input[type=checkbox]').addEventListener('change',(e)=>{
+      <input type="text" class="f-label" value="${esc(f.label)}" placeholder="項目名">
+      ${locked
+        ? `<span class="f-role-fixed">${esc(ROLE_LABELS[f.role])}</span>`
+        : `<select class="f-role">
+             <option value="equip" ${f.role==='equip'?'selected':''}>機器マスタから</option>
+             <option value="photo" ${f.role==='photo'?'selected':''}>写真ごとに入力</option>
+           </select>`}
+      <button class="icon-btn f-del" title="この項目を削除">✕</button>`;
+    row.querySelector('.f-show').addEventListener('change',(e)=>{
       f.show=e.target.checked; row.classList.toggle('off',!f.show); applyFieldChange();
     });
-    // ラベル名
-    row.querySelector('input[type=text]').addEventListener('input',(e)=>{
-      f.label=e.target.value; applyFieldChange();
+    row.querySelector('.f-label').addEventListener('input',(e)=>{ f.label=e.target.value; applyFieldChange(); });
+    const rs=row.querySelector('.f-role');
+    if(rs) rs.addEventListener('change',(e)=>{ f.role=e.target.value; renderFields(); applyFieldChange(); });
+    row.querySelector('.f-del').addEventListener('click',()=>{
+      if(!confirm(`項目「${f.label}」を削除しますか？\n入力済みの値も使われなくなります。`)) return;
+      state.fields=state.fields.filter(x=>x.id!==f.id);
+      renderFields(); applyFieldChange();
     });
-    // ドラッグ並べ替え
     const h=row.querySelector('.drag-handle');
     h.addEventListener('pointerdown',(e)=>startFieldDrag(e,row,h));
     list.appendChild(row);
   });
 }
-function defaultLabelOf(key){
-  const d=DEFAULT_FIELDS.find(x=>x.key===key); return d?d.label:key;
-}
+$('#btnAddField').addEventListener('click',()=>{
+  const name=(prompt('項目名を入力してください（例：建物名称）','')||'').trim();
+  if(!name) return;
+  state.fields=getFields();
+  state.fields.push({id:'f'+uid(), label:name, show:true, role:'equip'});
+  renderFields(); applyFieldChange();
+  toast(`項目「${name}」を追加しました`);
+});
 function startFieldDrag(e,row,handle){
   if(e.pointerType==='mouse' && e.button!==0) return;
   e.preventDefault();
   const list=$('#fieldList');
-  const fromKey=row.dataset.key;
+  const fromKey=row.dataset.fid;
   row.classList.add('dragging');
   try{ handle.setPointerCapture(e.pointerId); }catch(_){}
   const line=document.createElement('div'); line.className='drop-line';
@@ -1170,7 +1252,7 @@ function startFieldDrag(e,row,handle){
     const rows=[...list.querySelectorAll('.field-row')].filter(r=>r!==row);
     for(const r of rows){
       const b=r.getBoundingClientRect();
-      if(y < b.top + b.height/2){ list.insertBefore(line,r); targetKey=r.dataset.key; atEnd=false; return; }
+      if(y < b.top + b.height/2){ list.insertBefore(line,r); targetKey=r.dataset.fid; atEnd=false; return; }
     }
     list.appendChild(line); targetKey=null; atEnd=true;
   };
@@ -1182,10 +1264,10 @@ function startFieldDrag(e,row,handle){
     line.remove(); row.classList.remove('dragging');
     if(moved){
       const arr=state.fields;
-      const fi=arr.findIndex(x=>x.key===fromKey); if(fi<0) return;
+      const fi=arr.findIndex(x=>x.id===fromKey); if(fi<0) return;
       const [mv]=arr.splice(fi,1);
       if(atEnd||targetKey==null) arr.push(mv);
-      else{ const ti=arr.findIndex(x=>x.key===targetKey); arr.splice(ti<0?arr.length:ti,0,mv); }
+      else{ const ti=arr.findIndex(x=>x.id===targetKey); arr.splice(ti<0?arr.length:ti,0,mv); }
       renderFields(); applyFieldChange();
     }
   };
@@ -1218,7 +1300,7 @@ $('#btnTplSave').addEventListener('click',async()=>{
   const cur=$('#tplSelect').value;
   const name=(prompt('テンプレート名を入力してください（同じ名前なら上書きします）', cur||'')||'').trim();
   if(!name) return;
-  const fields=normalizeFields(state.fields).map(f=>({key:f.key,label:f.label,show:f.show}));
+  const fields=getFields().map(f=>({id:f.id,label:f.label,show:f.show,role:f.role}));
   const coverFields=normalizeCover(state.coverFields).map(f=>({key:f.key,label:f.label,show:f.show}));
   const i=fieldTemplates.findIndex(t=>t.name===name);
   if(i>=0){
@@ -1316,12 +1398,13 @@ function updateCounts(){
   if(saved && typeof saved==='object'){
     state={ job:{ building:(saved.job&&saved.job.building)||'', date:(saved.job&&saved.job.date)||'', dateEnd:(saved.job&&saved.job.dateEnd)||'',
                   overallWork:(saved.job&&saved.job.overallWork)||'', showDate:!(saved.job&&saved.job.showDate===false) },
-            equipment:saved.equipment||[], works:saved.works||[],
+            equipment:(saved.equipment||[]).map(normalizeEquip), works:saved.works||[],
             photos:(saved.photos||[]).map(normalizePhoto),
             fields:normalizeFields(saved.fields), coverFields:normalizeCover(saved.coverFields) };
     // 旧データ互換：現場の作業内容があれば、作業内容が空の写真に引き継ぐ
     const legacyWork = saved.job && saved.job.work;
-    if(legacyWork){ state.photos.forEach(p=>{ if(!p.work){ p.work=legacyWork; p.workSrc='manual'; } }); }
+    if(legacyWork){ const wf=workField();
+      if(wf) state.photos.forEach(p=>{ if(!(p.values&&p.values[wf.id])){ setPhotoValue(p,wf.id,legacyWork); p.workSrc='manual'; } }); }
   }
   bindJob(); renderMaster(); renderWorks(); renderPhotos(); renderFields(); updateCounts();
   await loadTemplates();   // テンプレートは現場データとは別に読み込む
