@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_36</title>
+<title>写真台帳ツール v1_53</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -207,14 +207,35 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 .cover-tbl{width:100%; border-collapse:collapse; font-size:15px;}
 .cover-tbl th{text-align:left; width:120px; color:var(--muted); font-weight:700; padding:12px 10px; border-bottom:1px solid #ddd; vertical-align:top; font-size:13px;}
 .cover-tbl td{padding:12px 10px; border-bottom:1px solid #ddd; vertical-align:top;}
-.pv-block{border:1px solid #333; margin-bottom:12px; padding:10px; display:grid; grid-template-columns:1fr 260px; gap:12px;}
-.pv-photo{background:#f0f2f3; border:1px solid #ccc; min-height:180px; display:flex; align-items:center; justify-content:center; overflow:hidden;}
-.pv-photo img{max-width:100%; max-height:340px; object-fit:contain;}
+.pv-block{border:1px solid #333; margin-bottom:12px; padding:10px; display:grid; grid-template-columns:1fr 260px; gap:12px;
+  height:310px; overflow:hidden;}   /* 印刷と同じ比率にして、画面と出力の見え方を一致させる */
+.pv-photo{background:#f0f2f3; border:1px solid #ccc; height:100%; min-height:0; display:flex; align-items:center; justify-content:center; overflow:hidden;}
+.pv-photo img{max-width:100%; max-height:100%; object-fit:contain;}
+.pv-meta{overflow:hidden;}
+/* 画面が狭いときは高さを固定しない（スマホでの確認用） */
+@media(max-width:680px){
+  .pv-block{height:auto; grid-template-columns:1fr;}
+  .pv-photo{min-height:180px;}
+}
 .pv-photo.blank{color:#aaa; font-size:13px;}
 .pv-meta{font-size:12.5px;}
 .pv-meta table{width:100%; border-collapse:collapse;}
 .pv-meta th{text-align:left; color:var(--muted); font-weight:700; width:82px; padding:4px 6px; vertical-align:top; border-bottom:1px solid #eee; font-size:11.5px;}
 .pv-meta td{padding:4px 6px; vertical-align:top; border-bottom:1px solid #eee;}
+/* 長い文章は自動で少し小さくして、枠から切れないようにする */
+.pv-meta td.len-l{font-size:85%; line-height:1.35;}
+.pv-meta td.len-xl{font-size:74%; line-height:1.3;}
+.pv-meta td.len-xxl{font-size:64%; line-height:1.25;}
+.pv-meta td.len-xxxl{font-size:55%; line-height:1.2;}
+.pv-meta td.len-x4{font-size:46%; line-height:1.15;}
+.pv-meta td.len-x5{font-size:38%; line-height:1.1;}
+.pv-meta td.len-x6{font-size:31%; line-height:1.05;}
+.pv-meta td.len-x7{font-size:25%; line-height:1.0;}
+/* 項目数が多いときの全体縮小 */
+.pv-meta.dense1{font-size:82%;}
+.pv-meta.dense1 th,.pv-meta.dense1 td{padding:2px 5px;}
+.pv-meta.dense2{font-size:66%;}
+.pv-meta.dense2 th,.pv-meta.dense2 td{padding:1px 4px;}
 .pv-no{display:inline-block; background:#333; color:#fff; font-weight:700; font-size:11px; padding:2px 8px; border-radius:4px; margin-bottom:6px;}
 
 /* ===== 印刷（PDF出力）専用 ===== */
@@ -279,12 +300,13 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_36</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_53</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
     <button class="tool-btn" id="btnImport">写真台帳データ読み込み</button>
     <button class="tool-btn primary" id="btnPdf">PDF出力</button>
+    <button class="tool-btn primary" id="btnXlsx">Excel出力</button>
     <input type="file" id="fileImport" accept="application/json,.json" hidden>
   </div>
   <div class="path-bar">
@@ -419,6 +441,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
     </div>
     <div class="preview-toolbar no-print">
       <button class="tool-btn primary" id="btnPdf2">PDF出力</button>
+      <button class="tool-btn primary" id="btnXlsx2">Excel出力</button>
       <span class="hint" style="margin:0;">「PDF出力」→ 送信先を「PDFとして保存」にすると台帳PDFになります。</span>
     </div>
     <div class="sheet" id="previewSheet"></div>
@@ -1200,6 +1223,28 @@ function reorderPhoto(fromId, targetPid, atEnd){
 }
 
 /* ---------- プレビュー / 印刷描画 ---------- */
+/* 内容欄に収まる文字数（実際のブラウザで測定した値。項目7個のとき）
+     標準=72字 / 85%=91字 / 74%=120字 / 64%=170字 / 55%=247字 / 46%=350字 / 38%=500字
+   項目が増えるほど内容欄は狭くなるので、その分だけ基準を厳しくする。
+   これを超える文章は段階的に文字を小さくして、枠から切れないようにする
+   （全角1・半角0.5として数える） */
+function lenClass(text, fieldCount){
+  const t=String(text??''); if(!t) return '';
+  let n=0;
+  for(const ch of t) n += /[\x00-\x7F\uFF61-\uFF9F]/.test(ch) ? 0.5 : 1;
+  // 項目7個を基準に、増減ぶんの行数を補正する（1項目あたり約12字ぶん）
+  const extra = Math.max(0, (fieldCount||7) - 7);
+  n += extra * 12;
+  if(n<= 72) return '';
+  if(n<= 91) return ' class="len-l"';
+  if(n<=120) return ' class="len-xl"';
+  if(n<=170) return ' class="len-xxl"';
+  if(n<=247) return ' class="len-xxxl"';
+  if(n<=350) return ' class="len-x4"';
+  if(n<=500) return ' class="len-x5"';
+  if(n<=700) return ' class="len-x6"';
+  return ' class="len-x7"';
+}
 function fmtDate(d){ return d ? d.replaceAll('-','.') : ''; }
 function buildLedgerHTML(){
   syncAllFromMasters();
@@ -1238,10 +1283,15 @@ function buildLedgerHTML(){
   });
   html+='<div class="pv-photos">';
   state.photos.forEach((p,i)=>{
-    const rows = fields.map(f=>`<tr><th>${esc(f.label)}</th><td>${esc(photoValue(p,f))}</td></tr>`).join('');
+    const rows = fields.map(f=>{
+      const v=photoValue(p,f);
+      return `<tr><th>${esc(f.label)}</th><td${lenClass(v, fields.length)}>${esc(v)}</td></tr>`;
+    }).join('');
+    // 項目が多い場合は表全体を縮めて枠内に収める
+    const denseCls = fields.length>=13 ? ' dense2' : (fields.length>=10 ? ' dense1' : '');
     html+=`<div class="pv-block">
       <div class="pv-photo${p.img?'':' blank'}">${p.img?`<img src="${p.img}">`:'（写真なし）'}</div>
-      <div class="pv-meta">
+      <div class="pv-meta${denseCls}">
         <span class="pv-no">No.${i+1}</span>
         <table>${rows}</table>
       </div>
@@ -1252,10 +1302,348 @@ function buildLedgerHTML(){
 }
 function renderPreview(){ $('#previewSheet').innerHTML=buildLedgerHTML(); }
 
-function doPrint(){
+async function doPrint(){
   $('#printArea').innerHTML=buildLedgerHTML();
+  /* 写真のデコードが終わる前に印刷ダイアログを開くと、1回目だけ写真が
+     空白になることがある。全画像の読み込み＋デコード完了を待ってから開く */
+  const imgs=[...document.querySelectorAll('#printArea img')];
+  if(imgs.length){
+    showBusy('印刷の準備中…');
+    try{
+      await Promise.all(imgs.map(im=>new Promise(res=>{
+        const done=()=>{ (im.decode? im.decode().catch(()=>{}) : Promise.resolve()).then(res); };
+        if(im.complete && im.naturalWidth>0) done();
+        else { im.onload=done; im.onerror=()=>res(); }
+      })));
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));  // 描画反映を1フレーム待つ
+    }finally{ hideBusy(); }
+  }
   window.print();
 }
+/* ============================================================
+   Excel出力（写真入り）
+   ・ExcelJS を CDN から読み込んで xlsx を組み立てる
+     → ツール本体は軽いまま。Excel出力の瞬間だけネット接続が必要
+   ・体裁はPDFと同じ（表紙＋1ページ3枚、写真の右に項目）
+   ============================================================ */
+const EXCELJS_CDN='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+function loadExcelJS(){
+  if(window.ExcelJS) return Promise.resolve();
+  return new Promise((res,rej)=>{
+    const sc=document.createElement('script');
+    sc.src=EXCELJS_CDN;
+    sc.onload=()=>res();
+    sc.onerror=()=>rej(new Error('ExcelJSを読み込めませんでした'));
+    document.head.appendChild(sc);
+  });
+}
+/* dataURL から、ExcelJS に渡す形式（base64と拡張子）を取り出す */
+function splitDataURL(dataUrl){
+  const m=/^data:image\/(png|jpeg|jpg|gif);base64,(.+)$/i.exec(dataUrl||'');
+  if(!m) return null;
+  let ext=m[1].toLowerCase(); if(ext==='jpg') ext='jpeg';
+  return {ext, base64:m[2]};
+}
+/* 画像の実寸を得る（縦横比を保って配置するため） */
+function imageSize(dataUrl){
+  return new Promise(res=>{
+    const im=new Image();
+    im.onload=()=>res({w:im.naturalWidth,h:im.naturalHeight});
+    im.onerror=()=>res(null);
+    im.src=dataUrl;
+  });
+}
+
+/* 文字列が指定の幅（半角文字いくつ分か）で何行になるか見積もる
+   全角は2文字分として数える。Excelの実測とは厳密には一致しないため少し余裕を見る */
+function wrapLines(text, capUnits){
+  const t=String(text??'');
+  if(!t) return 1;
+  const cap=Math.max(4, capUnits);
+  let lines=1, w=0;
+  for(const ch of t){
+    if(ch==='\n'){ lines++; w=0; continue; }
+    w += /[\x00-\x7F\uFF61-\uFF9F]/.test(ch) ? 1 : 2;   // 半角1・全角2
+    if(w>cap){ lines++; w=0; }
+  }
+  return lines;
+}
+/* 長い文章を決められた高さに収めるため、収まる範囲で最大の文字サイズを選ぶ
+   colChars … 列幅の指定値（既定フォント11pt基準の文字数）
+   maxH     … その行に使える高さ(pt) */
+function fitFont(text, colChars, maxH){
+  const BASE=11;
+  for(const size of [10,9,8,7,6]){
+    const capUnits = Math.max(4, (colChars-1) * (BASE/size));   // 小さいほど1行に多く入る
+    const lines = wrapLines(text, capUnits);
+    const need  = lines * size * 1.32 + 3;                      // 行送り＋上下の余白
+    if(need <= maxH) return {size, lines, need};
+  }
+  // 最小サイズでも収まらない場合は6ptで可能な限り表示
+  const capUnits=Math.max(4,(colChars-1)*(BASE/6));
+  const lines=wrapLines(text, capUnits);
+  return {size:6, lines, need:lines*6*1.32+3};
+}
+
+/* 画像の位置は EMU（Excel内部の単位）で直接指定する。
+   小数での指定は列幅に関わらず一律換算されてしまい、ずれるため。
+   1pt = 12700 EMU、1px(96dpi) = 9525 EMU */
+const EMU_PT=12700, EMU_PX=9525;
+/* 上からの距離(pt)が、どの行の何EMU目にあたるかを求める */
+function rowAnchor(ws, startRow, offsetPt){
+  let r = startRow, remain = offsetPt;
+  for(let i=0;i<300;i++){
+    const h = ws.getRow(r).height || 15;
+    if(h<=0){ r++; continue; }
+    if(remain < h) return {row:r-1, off:Math.round(remain*EMU_PT)};
+    remain -= h; r++;
+  }
+  return {row:startRow-1, off:0};
+}
+/* 列幅の指定値から実際の横幅(px)を求める（Excelの正式な換算式）
+   ※ 既定フォントの文字幅は環境によって7px/8pxと異なるため、
+     写真は狭いほう(7px)を前提に作る。広い環境でも枠からはみ出さない */
+function colPx(width){ return Math.trunc(((256*width + Math.trunc(128/7))/256)*7); }
+
+async function exportExcel(){
+  if(state.photos.length===0){ toast('写真がありません'); return; }
+  showBusy('Excelを準備中…');
+  try{
+    await loadExcelJS();
+  }catch(e){
+    hideBusy();
+    alert('Excel出力に必要な部品を読み込めませんでした。\nインターネットに接続された状態でお試しください。');
+    return;
+  }
+  try{
+    syncAllFromMasters();
+    const j=state.job;
+    const showDate = j.showDate!==false;
+    const fields = getFields().filter(f=>{
+      if(f.show===false) return false;
+      if(f.role==='date' && !showDate) return false;
+      return true;
+    });
+
+    const wb=new ExcelJS.Workbook();
+    wb.creator='写真台帳ツール';
+
+    /* 1シート＝1ページ（写真3枚）にする。
+       改ページの計算に頼らないので、環境によらず必ず3枚ずつになる */
+    const PRINT_H = 841.89 - 72;          // A4縦の印刷可能高さ 約770pt
+    const GAP_H   = 12;                   // ブロック間の隙間(pt)
+    const BLOCK_H = ((PRINT_H - GAP_H*3) / 3) * 0.96;
+
+    /* 列幅（既定フォント基準の文字数）。3列の合計が印刷幅537ptに収まる範囲で
+       写真の列をできるだけ広く取り、写真がセルいっぱいに入るようにしている */
+    const COL_PHOTO=52, COL_LABEL=14, COL_VALUE=26;
+
+    function newSheet(name){
+      const w=wb.addWorksheet(name,{
+        pageSetup:{ paperSize:9, orientation:'portrait',
+                    // 1シート＝必ず1ページに収める。
+                    // プリンタごとの余白の違いで改ページ位置がずれるのを防ぐ
+                    fitToPage:true, fitToWidth:1, fitToHeight:1,
+                    horizontalCentered:true,
+                    margins:{left:0.4,right:0.4,top:0.5,bottom:0.5,header:0.2,footer:0.2} }
+      });
+      w.getColumn(1).width=COL_PHOTO;   // 写真
+      w.getColumn(2).width=COL_LABEL;   // 項目名
+      w.getColumn(3).width=COL_VALUE;   // 値
+      return w;
+    }
+
+    /* --- 表紙（独立したシート） --- */
+    if(j.showCover!==false){
+      const cs=newSheet('表紙');
+      cs.pageSetup.verticalCentered=true;      // 用紙の上下中央に配置
+      // 表紙は写真が無いので専用の列幅にする（見出しと値の境目が中央に来るようにする）
+      cs.getColumn(1).width=2;    // 左の余白
+      cs.getColumn(2).width=27;   // 見出し（右寄せ）
+      cs.getColumn(3).width=27;   // 値（左寄せ）
+
+      const dS=fmtDate(j.date), dE=fmtDate(j.dateEnd);
+      const dateRange=(dS&&dE)?(dS===dE?dS:`${dS} 〜 ${dE}`):(dS||dE||'');
+      const cover=normalizeCover(state.coverFields).filter(c=>{
+        if(!c.show) return false;
+        if(c.key==='coverDate' && !showDate) return false;
+        return true;
+      });
+      const coverVal=(k)=> k==='building'? j.building : k==='overallWork'? j.overallWork : dateRange;
+
+      let cr=1;
+      // 表題
+      cs.mergeCells(cr,1,cr,3);
+      const t=cs.getCell(cr,1);
+      t.value='写 真 台 帳';
+      t.font={size:32,bold:true};
+      t.alignment={horizontal:'center',vertical:'middle'};
+      cs.getRow(cr).height=64;
+      cr++;
+      // 表題の下線
+      cs.mergeCells(cr,1,cr,3);
+      cs.getCell(cr,1).border={bottom:{style:'medium',color:{argb:'FF333333'}}};
+      cs.getRow(cr).height=10;
+      cr+=2;
+
+      // 項目（見出しは右寄せ・値は左寄せで中央に揃える）
+      cover.forEach(c=>{
+        cs.getCell(cr,2).value=c.label;
+        cs.getCell(cr,2).font={size:13,bold:true,color:{argb:'FF555555'}};
+        cs.getCell(cr,2).alignment={horizontal:'right',vertical:'middle'};
+        cs.getCell(cr,3).value=coverVal(c.key)||'';
+        cs.getCell(cr,3).font={size:14};
+        cs.getCell(cr,3).alignment={horizontal:'left',vertical:'middle',wrapText:true};
+        cs.getCell(cr,2).border={bottom:{style:'hair',color:{argb:'FFCCCCCC'}}};
+        cs.getCell(cr,3).border={bottom:{style:'hair',color:{argb:'FFCCCCCC'}}};
+        cs.getRow(cr).height=34;
+        cr++;
+      });
+      cs.pageSetup.printArea=`A1:C${cr-1}`;
+    }
+
+    /* --- 写真ページ（3枚ごとに1シート） --- */
+    const LABEL_ROWS= fields.length + 1;                    // No.行 ＋ 項目行
+    const COMPACT_H = Math.min(19, BLOCK_H / LABEL_ROWS);   // 項目1行の基本の高さ
+    const PHOTO_ROWS= LABEL_ROWS;                           // 余白行は作らない
+
+    let ws=null, row=1, pageNo=0;
+    for(let i=0;i<state.photos.length;i++){
+      showBusy(`Excelを作成中… ${i+1}/${state.photos.length}`);
+      if(i%3===0){                       // 3枚ごとに新しいシート
+        if(ws) ws.pageSetup.printArea=`A1:C${row-1}`;
+        pageNo++;
+        ws=newSheet(`${pageNo}ページ目`);
+        row=1;
+      }
+      const p=state.photos[i];
+      const top=row;
+
+      ws.getCell(top,2).value=`No.${i+1}`;
+      ws.getCell(top,2).font={bold:true,size:11};
+      ws.getCell(top,2).alignment={vertical:'middle'};
+
+      /* 行高の配り方
+         ・上から順に、必要なだけ（長文なら伸ばして）高さを取る
+         ・余ったぶんは全て「一番下の項目」に与える
+           → 内容・撮影内容など、下に置かれる自由記述の欄が一番広くなる
+         ・ブロック全体の高さは常に一定なので、1ページ3枚は崩れない */
+      ws.getRow(top).height=COMPACT_H;
+      let remain = BLOCK_H - COMPACT_H;
+
+      fields.forEach((f,k)=>{
+        const r=top+1+k;
+        const val=photoValue(p,f);
+        const isLast = (k === fields.length-1);
+
+        ws.getCell(r,2).value=f.label;
+        ws.getCell(r,2).font={bold:true,size:10,color:{argb:'FF66727D'}};
+        ws.getCell(r,2).alignment={vertical:'middle',wrapText:true};
+
+        let h;
+        if(isLast){
+          h = Math.max(COMPACT_H, remain);        // 残り全部を最後の項目へ
+        }else{
+          // 後続の項目ぶん（最低限の高さ）を残したうえで、必要なら伸ばす
+          const reserve = (fields.length-1-k) * COMPACT_H;
+          const maxH = Math.max(COMPACT_H, remain - reserve);
+          const fit  = fitFont(val, 26, maxH);
+          h = Math.min(Math.max(COMPACT_H, fit.need), maxH);
+        }
+        const fit2 = fitFont(val, 26, h);
+        ws.getCell(r,3).value=val;
+        ws.getCell(r,3).font={size:fit2.size};
+        // 行が広い欄（最下段や長文）は上詰め。1行だけの欄は中央でそろえる
+        const topAlign = isLast || fit2.lines>=2 || h > COMPACT_H*1.5;
+        ws.getCell(r,3).alignment={vertical:(topAlign?'top':'middle'), horizontal:'left', wrapText:true};
+        ws.getCell(r,2).alignment={vertical:(topAlign?'top':'middle'), wrapText:true};
+
+        const sep={style:'hair',color:{argb:'FFDDDDDD'}};
+        ws.getCell(r,2).border={bottom:sep};
+        ws.getCell(r,3).border={bottom:sep};
+
+        ws.getRow(r).height=h;
+        remain -= h;
+      });
+
+      // 写真エリアはブロックぶんのセルを結合して1つの枠にする
+      const bottomRow = top+PHOTO_ROWS-1;
+      if(PHOTO_ROWS>1) ws.mergeCells(top,1,bottomRow,1);
+
+      // 写真
+      if(p.img){
+        const parts=splitDataURL(p.img);
+        if(parts){
+          const id=wb.addImage({base64:parts.base64, extension:parts.ext});
+          const sz=await imageSize(p.img);
+          const PAD=3;                                  // 枠と写真のすき間(px)
+          const areaW = colPx(COL_PHOTO);               // A列の実際の幅(px)
+          const areaH = Math.round(BLOCK_H*4/3);        // ブロックの実際の高さ(px)
+          const boxW = areaW - PAD*2, boxH = areaH - PAD*2;
+          let w=boxW, h=boxH;
+          if(sz){
+            const scale=Math.min(boxW/sz.w, boxH/sz.h);
+            w=Math.round(sz.w*scale); h=Math.round(sz.h*scale);
+          }
+          // 枠の中央に来るよう、左からの距離と上からの距離をEMUで指定する
+          const offXpx = Math.max(0,(areaW-w)/2);
+          const offYpt = Math.max(0,(areaH-h)/2) * 3/4;   // px→pt
+          const ra = rowAnchor(ws, top, offYpt);
+          ws.addImage(id,{
+            tl:{ nativeCol:0, nativeColOff:Math.round(offXpx*EMU_PX),
+                 nativeRow:ra.row, nativeRowOff:ra.off },
+            ext:{width:w, height:h}, editAs:'oneCell' });
+        }
+      }else{
+        ws.getCell(top+1,1).value='（写真なし）';
+        ws.getCell(top+1,1).font={size:10,color:{argb:'FFAAAAAA'}};
+        ws.getCell(top+1,1).alignment={horizontal:'center'};
+      }
+
+      // ブロックを罫線で囲む
+      const bottom=bottomRow;
+      for(let r=top;r<=bottom;r++){
+        for(let c=1;c<=3;c++){
+          const cell=ws.getCell(r,c);
+          const b={};
+          if(r===top) b.top={style:'thin'};
+          if(r===bottom) b.bottom={style:'thin'};
+          if(c===1) b.left={style:'thin'};
+          if(c===3) b.right={style:'thin'};
+          if(c===1) b.right={style:'hair',color:{argb:'FFCCCCCC'}};
+          cell.border=Object.assign({},cell.border,b);
+        }
+      }
+
+      ws.getRow(bottom+1).height=GAP_H;
+      row = bottom+2;
+      await new Promise(r2=>setTimeout(r2,0));
+    }
+    if(ws) ws.pageSetup.printArea=`A1:C${row-1}`;
+
+    // ファイル名は書き出しと同じ規則（現場名＋日付）
+    const site=(j.building||'写真台帳').replace(/[\\/:*?"<>|]/g,'_').trim();
+    let d=j.date;
+    if(!d){ const t=new Date();
+      d=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; }
+    const fname=`${site}_${d.replaceAll('-','')}.xlsx`;
+
+    const buf=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=fname; a.click();
+    URL.revokeObjectURL(a.href);
+    hideBusy();
+    toast('Excelを出力しました');
+  }catch(err){
+    hideBusy();
+    console.error(err);
+    alert('Excelの作成に失敗しました：'+(err&&err.message?err.message:''));
+  }
+}
+$('#btnXlsx').addEventListener('click',exportExcel);
+$('#btnXlsx2').addEventListener('click',exportExcel);
+
 $('#btnPdf').addEventListener('click',doPrint);
 $('#btnPdf2').addEventListener('click',doPrint);
 
