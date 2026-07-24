@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真台帳ツール v1_54</title>
+<title>写真台帳ツール v1_55</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0D7D8A">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -300,7 +300,7 @@ h2.sec-title{font-size:17px; margin:2px 0 14px;}
 <!-- ========== ツールバー ========== -->
 <div class="appbar no-print">
   <div class="appbar-in">
-    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_54</span></div>
+    <div class="brand"><span class="mark">写真台帳ツール</span><span class="ver">v1_55</span></div>
     <div class="save-status" id="saveStatus"><span class="dot"></span><span id="saveText">保存済み</span></div>
     <div class="spacer"></div>
     <button class="tool-btn" id="btnExport">写真台帳データ書き出し</button>
@@ -1401,10 +1401,11 @@ function rowAnchor(ws, startRow, offsetPt){
   return {row:startRow-1, off:0};
 }
 /* 列幅の指定値から実際の横幅(px)を求める（Excelの正式な換算式）
-   ※ 実際の幅は既定フォントで変わる。日本語版Excel（游ゴシック＝文字幅8px）を
-     基準にして、実際に使う環境で写真がちょうど中央に来るようにする。
-     印刷は fitToPage で必ず1ページに収まるため、幅が広くなっても分割はされない */
-function colPx(width){ return Math.trunc(((256*width + Math.trunc(128/8))/256)*8); }
+   ※ 画像はEMU＝絶対サイズで埋め込まれるが、列の実幅は環境（既定フォント・
+     画面拡大率）で変わる。このファイルの既定フォント(Calibri)基準の364pxが
+     最小幅なので、それに合わせておけばどの環境でも写真が枠からはみ出さない。
+     広い環境では右側に少し余白が出るが、印刷でB列に重なるよりずっと良い */
+function colPx(width){ return Math.trunc(((256*width + Math.trunc(128/7))/256)*7); }
 
 async function exportExcel(){
   if(state.photos.length===0){ toast('写真がありません'); return; }
